@@ -7,11 +7,15 @@ from app.core.websocket import manager
 from app.schemas.command import CommandInput, CommandResponse, ParsedIntent, MultiStepPlan
 from app.schemas.product import ProductCreate, ProductUpdate, ProductResponse
 from app.schemas.order import OrderCreate, OrderUpdate, OrderResponse
+from app.schemas.customer import CustomerCreate, CustomerUpdate, CustomerResponse
 from app.services.intent_parser import IntentParser
 from app.services.action_executor import ActionExecutor
 from app.services.product_service import ProductService
 from app.services.order_service import OrderService
+from app.services.customer_service import CustomerService
+from app.services.analytics_service import AnalyticsService
 from app.models.action_log import ActionLog
+from app.models.customer import Customer  # Import to register model
 
 router = APIRouter()
 
@@ -236,6 +240,155 @@ async def cancel_order(
         "id": order.id, "status": order.status
     })
     return order
+
+
+# ============== CUSTOMER ENDPOINTS ==============
+
+@router.get("/customers", response_model=List[CustomerResponse])
+async def list_customers(
+    skip: int = 0,
+    limit: int = 100,
+    db: AsyncSession = Depends(get_db)
+):
+    service = CustomerService(db)
+    return await service.get_all(skip, limit)
+
+
+@router.get("/customers/{customer_id}", response_model=CustomerResponse)
+async def get_customer(
+    customer_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    service = CustomerService(db)
+    customer = await service.get_by_id(customer_id)
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    return customer
+
+
+@router.post("/customers", response_model=CustomerResponse)
+async def create_customer(
+    data: CustomerCreate,
+    db: AsyncSession = Depends(get_db)
+):
+    service = CustomerService(db)
+    # Check if email already exists
+    existing = await service.get_by_email(data.email)
+    if existing:
+        raise HTTPException(status_code=400, detail="Customer with this email already exists")
+    customer = await service.create(data)
+    await manager.broadcast_update("customer", "created", {
+        "id": customer.id, "name": customer.name, "email": customer.email
+    })
+    return customer
+
+
+@router.put("/customers/{customer_id}", response_model=CustomerResponse)
+async def update_customer(
+    customer_id: int,
+    data: CustomerUpdate,
+    db: AsyncSession = Depends(get_db)
+):
+    service = CustomerService(db)
+    customer = await service.update(customer_id, data)
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    await manager.broadcast_update("customer", "updated", {
+        "id": customer.id, "name": customer.name, "email": customer.email
+    })
+    return customer
+
+
+@router.delete("/customers/{customer_id}")
+async def delete_customer(
+    customer_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    service = CustomerService(db)
+    success = await service.delete(customer_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    await manager.broadcast_update("customer", "deleted", {"id": customer_id})
+    return {"message": "Customer deleted"}
+
+
+@router.get("/customers/search/{query}")
+async def search_customers(
+    query: str,
+    db: AsyncSession = Depends(get_db)
+):
+    service = CustomerService(db)
+    customers = await service.search(query)
+    return customers
+
+
+# ============== ANALYTICS ENDPOINTS ==============
+
+@router.get("/analytics/dashboard")
+async def get_dashboard_analytics(
+    db: AsyncSession = Depends(get_db)
+):
+    """Get main dashboard statistics"""
+    service = AnalyticsService(db)
+    return await service.get_dashboard_stats()
+
+
+@router.get("/analytics/revenue")
+async def get_revenue_analytics(
+    days: int = 7,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get daily revenue for the last N days"""
+    service = AnalyticsService(db)
+    return await service.get_revenue_by_day(days)
+
+
+@router.get("/analytics/order-status")
+async def get_order_status_distribution(
+    db: AsyncSession = Depends(get_db)
+):
+    """Get order count by status"""
+    service = AnalyticsService(db)
+    return await service.get_order_status_distribution()
+
+
+@router.get("/analytics/top-products")
+async def get_top_products(
+    limit: int = 5,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get top selling products"""
+    service = AnalyticsService(db)
+    return await service.get_top_products(limit)
+
+
+@router.get("/analytics/top-customers")
+async def get_top_customers(
+    limit: int = 5,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get top customers by spending"""
+    service = AnalyticsService(db)
+    return await service.get_top_customers(limit)
+
+
+@router.get("/analytics/recent-orders")
+async def get_recent_orders(
+    limit: int = 10,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get recent orders"""
+    service = AnalyticsService(db)
+    return await service.get_recent_orders(limit)
+
+
+@router.get("/analytics/monthly-comparison")
+async def get_monthly_comparison(
+    db: AsyncSession = Depends(get_db)
+):
+    """Compare this month vs last month"""
+    service = AnalyticsService(db)
+    return await service.get_monthly_comparison()
 
 
 # ============== WEBSOCKET ENDPOINT ==============
