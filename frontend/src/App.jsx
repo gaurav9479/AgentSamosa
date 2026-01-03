@@ -53,6 +53,13 @@ function App() {
   const [userSearch, setUserSearch] = useState('')
   const [userRoleFilter, setUserRoleFilter] = useState('')
   const [superAdminTab, setSuperAdminTab] = useState('overview')
+  const [showShopForm, setShowShopForm] = useState(false)
+  const [shopForm, setShopForm] = useState({
+    name: '', description: '', category_id: '',
+    owner_name: '', owner_email: '', owner_phone: '',
+    address: '', city: '', pincode: '', gst_number: ''
+  })
+  const [editingShop, setEditingShop] = useState(null)
 
   // UI states
   const [isConnected, setIsConnected] = useState(false)
@@ -567,6 +574,75 @@ function App() {
     }
   }
 
+  const resetShopForm = () => {
+    setShopForm({
+      name: '', description: '', category_id: '',
+      owner_name: '', owner_email: '', owner_phone: '',
+      address: '', city: '', pincode: '', gst_number: ''
+    })
+    setEditingShop(null)
+    setShowShopForm(false)
+  }
+
+  const submitShopForm = async (e) => {
+    e.preventDefault()
+    const payload = {
+      ...shopForm,
+      category_id: shopForm.category_id ? parseInt(shopForm.category_id) : null
+    }
+
+    let res
+    if (editingShop) {
+      res = await fetch(`/api/shops/${editingShop.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+    } else {
+      res = await fetch('/api/shops', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+    }
+
+    if (res.ok) {
+      addLog(editingShop ? 'Shop updated' : 'Shop registered', 'success')
+      resetShopForm()
+      fetchAllShops(0, true)
+      fetchPlatformStats()
+    } else {
+      addLog('Failed to save shop', 'error')
+    }
+  }
+
+  const startEditShop = (shop) => {
+    setShopForm({
+      name: shop.name || '',
+      description: shop.description || '',
+      category_id: shop.category_id?.toString() || '',
+      owner_name: shop.owner_name || '',
+      owner_email: shop.owner_email || '',
+      owner_phone: shop.owner_phone || '',
+      address: shop.address || '',
+      city: shop.city || '',
+      pincode: shop.pincode || '',
+      gst_number: shop.gst_number || ''
+    })
+    setEditingShop(shop)
+    setShowShopForm(true)
+  }
+
+  const deleteShop = async (shopId) => {
+    if (!confirm('Delete this shop? This cannot be undone.')) return
+    const res = await fetch(`/api/shops/${shopId}`, { method: 'DELETE' })
+    if (res.ok) {
+      addLog('Shop deleted', 'success')
+      fetchAllShops(0, true)
+      fetchPlatformStats()
+    }
+  }
+
   // Cart functions
   const addToCart = (product) => {
     setCart(prev => {
@@ -742,33 +818,108 @@ function App() {
         )}
 
         {superAdminTab === 'shops' && (
-          <div className="data-panel">
-            <SearchFilterBar search={shopSearch} setSearch={setShopSearch} placeholder="Search shops by name, email, city..." />
-            <h2>All Shops ({allShops.length})</h2>
-            <div className="data-table">
-              <table>
-                <thead>
-                  <tr><th>Shop Name</th><th>Owner</th><th>City</th><th>Orders</th><th>Revenue</th><th>Status</th><th>Actions</th></tr>
-                </thead>
-                <tbody>
-                  {allShops.map(shop => (
-                    <tr key={shop.id} className={!shop.is_active ? 'suspended' : ''}>
-                      <td><div className="shop-cell"><strong>{shop.name}</strong>{shop.is_verified && <span className="verified-badge">✓</span>}</div></td>
-                      <td>{shop.owner_email || '-'}</td>
-                      <td>{shop.city || '-'}</td>
-                      <td>{shop.total_orders}</td>
-                      <td>${shop.total_revenue?.toLocaleString()}</td>
-                      <td><span className={`status ${shop.is_active ? 'active' : 'suspended'}`}>{shop.is_active ? 'Active' : 'Suspended'}</span></td>
-                      <td>
-                        {!shop.is_verified && <button className="verify-btn" onClick={() => verifyShop(shop.id)}>Verify</button>}
-                        {shop.is_active ? <button className="suspend-btn" onClick={() => suspendShop(shop.id)}>Suspend</button> : <button className="activate-btn" onClick={() => activateShop(shop.id)}>Activate</button>}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          <div className="tab-content">
+            {showShopForm ? (
+              <div className="form-panel">
+                <h2>{editingShop ? 'Edit Shop' : 'Register New Shop'}</h2>
+                <form onSubmit={submitShopForm}>
+                  <div className="form-section">
+                    <h3>Shop Details</h3>
+                    <div className="form-group">
+                      <label>Shop Name *</label>
+                      <input type="text" value={shopForm.name} onChange={e => setShopForm({...shopForm, name: e.target.value})} required />
+                    </div>
+                    <div className="form-group">
+                      <label>Description</label>
+                      <textarea value={shopForm.description} onChange={e => setShopForm({...shopForm, description: e.target.value})} />
+                    </div>
+                    <div className="form-group">
+                      <label>Category</label>
+                      <select value={shopForm.category_id} onChange={e => setShopForm({...shopForm, category_id: e.target.value})}>
+                        <option value="">Select Category</option>
+                        {shopCategories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="form-section">
+                    <h3>Owner Information</h3>
+                    <div className="form-group">
+                      <label>Owner Name</label>
+                      <input type="text" value={shopForm.owner_name} onChange={e => setShopForm({...shopForm, owner_name: e.target.value})} />
+                    </div>
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label>Owner Email</label>
+                        <input type="email" value={shopForm.owner_email} onChange={e => setShopForm({...shopForm, owner_email: e.target.value})} />
+                      </div>
+                      <div className="form-group">
+                        <label>Owner Phone</label>
+                        <input type="text" value={shopForm.owner_phone} onChange={e => setShopForm({...shopForm, owner_phone: e.target.value})} />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="form-section">
+                    <h3>Location</h3>
+                    <div className="form-group">
+                      <label>Address</label>
+                      <textarea value={shopForm.address} onChange={e => setShopForm({...shopForm, address: e.target.value})} />
+                    </div>
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label>City</label>
+                        <input type="text" value={shopForm.city} onChange={e => setShopForm({...shopForm, city: e.target.value})} />
+                      </div>
+                      <div className="form-group">
+                        <label>Pincode</label>
+                        <input type="text" value={shopForm.pincode} onChange={e => setShopForm({...shopForm, pincode: e.target.value})} />
+                      </div>
+                    </div>
+                    <div className="form-group">
+                      <label>GST Number</label>
+                      <input type="text" value={shopForm.gst_number} onChange={e => setShopForm({...shopForm, gst_number: e.target.value})} placeholder="Optional" />
+                    </div>
+                  </div>
+                  <div className="form-actions">
+                    <button type="submit" className="submit-btn">{editingShop ? 'Update Shop' : 'Register Shop'}</button>
+                    <button type="button" className="cancel-btn" onClick={resetShopForm}>Cancel</button>
+                  </div>
+                </form>
+              </div>
+            ) : (
+              <div style={{display: 'flex', justifyContent: 'flex-end', marginBottom: '15px'}}>
+                <button className="submit-btn" onClick={() => setShowShopForm(true)}>+ Register New Shop</button>
+              </div>
+            )}
+            <div className="data-panel">
+              <SearchFilterBar search={shopSearch} setSearch={setShopSearch} placeholder="Search shops by name, email, city..." />
+              <h2>All Shops ({allShops.length})</h2>
+              <div className="data-table">
+                <table>
+                  <thead>
+                    <tr><th>Shop Name</th><th>Owner</th><th>City</th><th>Orders</th><th>Revenue</th><th>Status</th><th>Actions</th></tr>
+                  </thead>
+                  <tbody>
+                    {allShops.map(shop => (
+                      <tr key={shop.id} className={!shop.is_active ? 'suspended' : ''}>
+                        <td><div className="shop-cell"><strong>{shop.name}</strong>{shop.is_verified && <span className="verified-badge">✓</span>}</div></td>
+                        <td>{shop.owner_email || '-'}</td>
+                        <td>{shop.city || '-'}</td>
+                        <td>{shop.total_orders}</td>
+                        <td>${shop.total_revenue?.toLocaleString()}</td>
+                        <td><span className={`status ${shop.is_active ? 'active' : 'suspended'}`}>{shop.is_active ? 'Active' : 'Suspended'}</span></td>
+                        <td>
+                          <button className="edit-btn" onClick={() => startEditShop(shop)}>Edit</button>
+                          {!shop.is_verified && <button className="verify-btn" onClick={() => verifyShop(shop.id)}>Verify</button>}
+                          {shop.is_active ? <button className="suspend-btn" onClick={() => suspendShop(shop.id)}>Suspend</button> : <button className="activate-btn" onClick={() => activateShop(shop.id)}>Activate</button>}
+                          <button className="delete-btn" onClick={() => deleteShop(shop.id)}>Delete</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <LoadMoreButton hasMore={allShopsHasMore} isLoading={isLoading} onClick={() => fetchAllShops(allShopsPage + 1)} />
             </div>
-            <LoadMoreButton hasMore={allShopsHasMore} isLoading={isLoading} onClick={() => fetchAllShops(allShopsPage + 1)} />
           </div>
         )}
 
