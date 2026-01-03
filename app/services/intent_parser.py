@@ -27,6 +27,13 @@ Available actions:
 - list_orders: List all orders (params: status?)
 - get_order: Get a specific order (params: order_id)
 
+- create_customer: Create a new customer (params: name, email, phone?, address?)
+- update_customer: Update a customer (params: customer_id, name?, email?, phone?, address?)
+- delete_customer: Delete a customer (params: customer_id)
+- list_customers: List all customers (params: none)
+- get_customer: Get a specific customer (params: customer_id or email)
+- search_customers: Search customers by name or email (params: query)
+
 Rules:
 1. Output ONLY valid JSON, no markdown or explanation
 2. For destructive actions (delete, cancel), set requires_confirmation: true

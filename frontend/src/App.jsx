@@ -4,11 +4,11 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 const EXAMPLE_COMMANDS = [
   "Create a product called MacBook Pro with price 2499",
   "Show all products",
-  "Update product 1 price to 1999",
   "Create order for product 1 quantity 2 for John Doe",
   "List all orders",
-  "Cancel order 1",
-  "Delete product 2",
+  "Create a customer named John Smith with email john@email.com",
+  "List all customers",
+  "Search for customers named John",
 ]
 
 const COLORS = ['#3b82f6', '#22c55e', '#f97316', '#8b5cf6', '#ef4444']

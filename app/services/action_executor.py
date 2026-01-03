@@ -5,8 +5,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.schemas.command import ParsedIntent, CommandResponse, MultiStepPlan
 from app.schemas.product import ProductCreate, ProductUpdate
 from app.schemas.order import OrderCreate, OrderUpdate
+from app.schemas.customer import CustomerCreate, CustomerUpdate
 from app.services.product_service import ProductService
 from app.services.order_service import OrderService
+from app.services.customer_service import CustomerService
 
 
 class ActionExecutor:
@@ -14,6 +16,7 @@ class ActionExecutor:
         self.db = db
         self.product_service = ProductService(db)
         self.order_service = OrderService(db)
+        self.customer_service = CustomerService(db)
         self.pending_confirmations: Dict[str, ParsedIntent] = {}
 
     async def execute(
@@ -45,6 +48,13 @@ class ActionExecutor:
             "cancel_order": self._cancel_order,
             "list_orders": self._list_orders,
             "get_order": self._get_order,
+            # Customer actions
+            "create_customer": self._create_customer,
+            "update_customer": self._update_customer,
+            "delete_customer": self._delete_customer,
+            "list_customers": self._list_customers,
+            "get_customer": self._get_customer,
+            "search_customers": self._search_customers,
             # Error handling
             "error": self._handle_error,
         }
@@ -309,4 +319,139 @@ class ActionExecutor:
             success=False,
             action="error",
             message=params.get("error", "An unknown error occurred"),
+        )
+
+    # Customer handlers
+    async def _create_customer(self, params: Dict[str, Any]) -> CommandResponse:
+        try:
+            data = CustomerCreate(
+                name=params["name"],
+                email=params["email"],
+                phone=params.get("phone"),
+                address=params.get("address"),
+            )
+            # Check if email already exists
+            existing = await self.customer_service.get_by_email(data.email)
+            if existing:
+                return CommandResponse(
+                    success=False,
+                    action="create_customer",
+                    message=f"Customer with email {data.email} already exists",
+                )
+            customer = await self.customer_service.create(data)
+            return CommandResponse(
+                success=True,
+                action="create_customer",
+                message=f"Created customer '{customer.name}' with ID {customer.id}",
+                data={"id": customer.id, "name": customer.name, "email": customer.email},
+            )
+        except KeyError as e:
+            return CommandResponse(
+                success=False,
+                action="create_customer",
+                message=f"Missing required parameter: {e}",
+            )
+
+    async def _update_customer(self, params: Dict[str, Any]) -> CommandResponse:
+        customer_id = params.get("customer_id")
+        if not customer_id:
+            return CommandResponse(
+                success=False,
+                action="update_customer",
+                message="Customer ID is required",
+            )
+
+        update_data = {k: v for k, v in params.items() if k != "customer_id" and v is not None}
+        data = CustomerUpdate(**update_data)
+        customer = await self.customer_service.update(customer_id, data)
+
+        if not customer:
+            return CommandResponse(
+                success=False,
+                action="update_customer",
+                message=f"Customer {customer_id} not found",
+            )
+
+        return CommandResponse(
+            success=True,
+            action="update_customer",
+            message=f"Updated customer {customer.id}",
+            data={"id": customer.id, "name": customer.name, "email": customer.email},
+        )
+
+    async def _delete_customer(self, params: Dict[str, Any]) -> CommandResponse:
+        customer_id = params.get("customer_id")
+        if not customer_id:
+            return CommandResponse(
+                success=False,
+                action="delete_customer",
+                message="Customer ID is required",
+            )
+
+        success = await self.customer_service.delete(customer_id)
+        if not success:
+            return CommandResponse(
+                success=False,
+                action="delete_customer",
+                message=f"Customer {customer_id} not found",
+            )
+
+        return CommandResponse(
+            success=True,
+            action="delete_customer",
+            message=f"Deleted customer {customer_id}",
+        )
+
+    async def _list_customers(self, params: Dict[str, Any]) -> CommandResponse:
+        customers = await self.customer_service.get_all()
+        return CommandResponse(
+            success=True,
+            action="list_customers",
+            message=f"Found {len(customers)} customers",
+            data=[{
+                "id": c.id,
+                "name": c.name,
+                "email": c.email,
+                "phone": c.phone,
+                "total_orders": c.total_orders,
+                "total_spent": c.total_spent
+            } for c in customers],
+        )
+
+    async def _get_customer(self, params: Dict[str, Any]) -> CommandResponse:
+        customer = None
+        if "customer_id" in params:
+            customer = await self.customer_service.get_by_id(params["customer_id"])
+        elif "email" in params:
+            customer = await self.customer_service.get_by_email(params["email"])
+
+        if not customer:
+            return CommandResponse(
+                success=False,
+                action="get_customer",
+                message="Customer not found",
+            )
+
+        return CommandResponse(
+            success=True,
+            action="get_customer",
+            message=f"Found customer: {customer.name}",
+            data={"id": customer.id, "name": customer.name, "email": customer.email, "phone": customer.phone},
+        )
+
+    async def _search_customers(self, params: Dict[str, Any]) -> CommandResponse:
+        query = params.get("query")
+        if not query:
+            return CommandResponse(
+                success=False,
+                action="search_customers",
+                message="Search query is required",
+            )
+
+        customers = await self.customer_service.search(query)
+        return CommandResponse(
+            success=True,
+            action="search_customers",
+            message=f"Found {len(customers)} customers matching '{query}'",
+            data=[{"id": c.id, "name": c.name, "email": c.email} for c in customers],
         )
