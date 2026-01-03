@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, and_
 from typing import Optional, List
 
 from app.models.order import Order, OrderStatus
@@ -25,6 +25,7 @@ class OrderService:
         total_amount = unit_price * data.quantity
 
         order = Order(
+            shop_id=product.shop_id,  # Set shop from product
             product_id=data.product_id,
             product_name=product.name,  # Snapshot product name
             unit_price=unit_price,  # Snapshot price at order time
@@ -88,3 +89,20 @@ class OrderService:
             select(Order).order_by(Order.created_at.desc()).limit(1)
         )
         return result.scalar_one_or_none()
+
+    async def get_by_shop(
+        self, shop_id: int, status: Optional[str] = None, skip: int = 0, limit: int = 100
+    ) -> List[Order]:
+        """Get all orders for a specific shop"""
+        conditions = [Order.shop_id == shop_id]
+        if status:
+            conditions.append(Order.status == status)
+
+        result = await self.db.execute(
+            select(Order)
+            .where(and_(*conditions))
+            .order_by(Order.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+        )
+        return list(result.scalars().all())

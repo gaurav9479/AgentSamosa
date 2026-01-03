@@ -44,7 +44,10 @@ class Product(Base):
     min_stock_level = Column(Integer, default=5)  # Alert when stock falls below
     max_stock_level = Column(Integer, nullable=True)
 
-    # Categorization
+    # Shop (which shop this product belongs to)
+    shop_id = Column(Integer, ForeignKey("shops.id"), nullable=True, index=True)
+
+    # Categorization (within the shop)
     category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
     tags = Column(String(500), nullable=True)  # Comma-separated tags
 
@@ -69,6 +72,7 @@ class Product(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     # Relationships
+    shop = relationship("Shop", back_populates="products")
     category = relationship("Category", back_populates="products")
 
     @property

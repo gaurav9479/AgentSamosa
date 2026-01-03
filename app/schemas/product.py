@@ -47,6 +47,9 @@ class ProductCreate(BaseModel):
     name: str
     price: float = Field(gt=0)
 
+    # Shop this product belongs to
+    shop_id: Optional[int] = None
+
     # Optional basic info
     description: Optional[str] = None
     brand: Optional[str] = None
@@ -80,6 +83,7 @@ class ProductCreate(BaseModel):
 
 class ProductUpdate(BaseModel):
     name: Optional[str] = None
+    shop_id: Optional[int] = None
     description: Optional[str] = None
     brand: Optional[str] = None
     sku: Optional[str] = None
@@ -109,6 +113,7 @@ class ProductUpdate(BaseModel):
 class ProductResponse(BaseModel):
     id: int
     name: str
+    shop_id: Optional[int]
     description: Optional[str]
     brand: Optional[str]
     sku: Optional[str]

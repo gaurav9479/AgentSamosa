@@ -108,6 +108,7 @@ class ProductService:
         self,
         skip: int = 0,
         limit: int = 100,
+        shop_id: Optional[int] = None,
         category_id: Optional[int] = None,
         search: Optional[str] = None,
         active_only: bool = True,
@@ -117,6 +118,9 @@ class ProductService:
 
         if active_only and not include_inactive:
             query = query.where(Product.is_active == True)
+
+        if shop_id:
+            query = query.where(Product.shop_id == shop_id)
 
         if category_id:
             query = query.where(Product.category_id == category_id)
@@ -155,21 +159,23 @@ class ProductService:
         )
         return list(result.scalars().all())
 
-    async def search(self, query: str, limit: int = 20) -> List[Product]:
+    async def search(self, query: str, shop_id: Optional[int] = None, limit: int = 20) -> List[Product]:
         search_term = f"%{query}%"
+        conditions = [
+            Product.is_active == True,
+            or_(
+                Product.name.ilike(search_term),
+                Product.brand.ilike(search_term),
+                Product.description.ilike(search_term),
+                Product.tags.ilike(search_term)
+            )
+        ]
+        if shop_id:
+            conditions.append(Product.shop_id == shop_id)
+
         result = await self.db.execute(
             select(Product)
-            .where(
-                and_(
-                    Product.is_active == True,
-                    or_(
-                        Product.name.ilike(search_term),
-                        Product.brand.ilike(search_term),
-                        Product.description.ilike(search_term),
-                        Product.tags.ilike(search_term)
-                    )
-                )
-            )
+            .where(and_(*conditions))
             .order_by(Product.sold_count.desc())
             .limit(limit)
         )
@@ -228,16 +234,18 @@ class ProductService:
         result = await self.db.execute(query)
         return result.scalar() or 0
 
-    async def get_low_stock(self) -> List[Product]:
+    async def get_low_stock(self, shop_id: Optional[int] = None) -> List[Product]:
         """Get products with stock at or below minimum level"""
+        conditions = [
+            Product.is_active == True,
+            Product.quantity <= Product.min_stock_level
+        ]
+        if shop_id:
+            conditions.append(Product.shop_id == shop_id)
+
         result = await self.db.execute(
             select(Product)
-            .where(
-                and_(
-                    Product.is_active == True,
-                    Product.quantity <= Product.min_stock_level
-                )
-            )
+            .where(and_(*conditions))
             .order_by(Product.quantity)
         )
         return list(result.scalars().all())

@@ -11,12 +11,17 @@ from app.schemas.product import (
 )
 from app.schemas.order import OrderCreate, OrderUpdate, OrderResponse
 from app.schemas.customer import CustomerCreate, CustomerUpdate, CustomerResponse
+from app.schemas.shop import (
+    ShopCreate, ShopUpdate, ShopResponse,
+    ShopCategoryCreate, ShopCategoryUpdate, ShopCategoryResponse
+)
 from app.services.intent_parser import IntentParser
 from app.services.action_executor import ActionExecutor
 from app.services.product_service import ProductService, CategoryService
 from app.services.order_service import OrderService
 from app.services.customer_service import CustomerService
 from app.services.analytics_service import AnalyticsService
+from app.services.shop_service import ShopService, ShopCategoryService
 from app.models.action_log import ActionLog
 from app.models.customer import Customer
 from app.models.product import Category
@@ -125,6 +130,171 @@ async def delete_category(category_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Category not found")
     await manager.broadcast_update("category", "deleted", {"id": category_id})
     return {"message": "Category deleted"}
+
+
+# ============== SHOP CATEGORY ENDPOINTS ==============
+
+@router.get("/shop-categories", response_model=List[ShopCategoryResponse])
+async def list_shop_categories(db: AsyncSession = Depends(get_db)):
+    """List all shop categories (Beauty, Grocery, Clothing, etc.)"""
+    service = ShopCategoryService(db)
+    return await service.get_all()
+
+
+@router.get("/shop-categories/with-counts")
+async def list_shop_categories_with_counts(db: AsyncSession = Depends(get_db)):
+    """List shop categories with shop counts"""
+    service = ShopCategoryService(db)
+    return await service.get_with_shop_count()
+
+
+@router.get("/shop-categories/{category_id}", response_model=ShopCategoryResponse)
+async def get_shop_category(category_id: int, db: AsyncSession = Depends(get_db)):
+    service = ShopCategoryService(db)
+    category = await service.get_by_id(category_id)
+    if not category:
+        raise HTTPException(status_code=404, detail="Shop category not found")
+    return category
+
+
+@router.post("/shop-categories", response_model=ShopCategoryResponse)
+async def create_shop_category(data: ShopCategoryCreate, db: AsyncSession = Depends(get_db)):
+    service = ShopCategoryService(db)
+    category = await service.create(data)
+    return category
+
+
+@router.put("/shop-categories/{category_id}", response_model=ShopCategoryResponse)
+async def update_shop_category(category_id: int, data: ShopCategoryUpdate, db: AsyncSession = Depends(get_db)):
+    service = ShopCategoryService(db)
+    category = await service.update(category_id, data)
+    if not category:
+        raise HTTPException(status_code=404, detail="Shop category not found")
+    return category
+
+
+@router.delete("/shop-categories/{category_id}")
+async def delete_shop_category(category_id: int, db: AsyncSession = Depends(get_db)):
+    service = ShopCategoryService(db)
+    success = await service.delete(category_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Shop category not found")
+    return {"message": "Shop category deleted"}
+
+
+# ============== SHOP ENDPOINTS ==============
+
+@router.get("/shops", response_model=List[ShopResponse])
+async def list_shops(
+    category_id: Optional[int] = None,
+    city: Optional[str] = None,
+    search: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 50,
+    db: AsyncSession = Depends(get_db)
+):
+    """List all shops, optionally filtered by category, city, or search"""
+    service = ShopService(db)
+    return await service.get_all(skip, limit, category_id, city, search)
+
+
+@router.get("/shops/by-category/{category_id}")
+async def get_shops_by_category(category_id: int, db: AsyncSession = Depends(get_db)):
+    """Get all shops in a specific category"""
+    service = ShopService(db)
+    return await service.get_by_category(category_id)
+
+
+@router.get("/shops/{shop_id}", response_model=ShopResponse)
+async def get_shop(shop_id: int, db: AsyncSession = Depends(get_db)):
+    service = ShopService(db)
+    shop = await service.get_by_id(shop_id)
+    if not shop:
+        raise HTTPException(status_code=404, detail="Shop not found")
+    return shop
+
+
+@router.get("/shops/{shop_id}/dashboard")
+async def get_shop_dashboard(shop_id: int, db: AsyncSession = Depends(get_db)):
+    """Get dashboard stats for a shop owner"""
+    service = ShopService(db)
+    shop = await service.get_by_id(shop_id)
+    if not shop:
+        raise HTTPException(status_code=404, detail="Shop not found")
+    return await service.get_dashboard_stats(shop_id)
+
+
+@router.get("/shops/{shop_id}/products", response_model=List[ProductResponse])
+async def get_shop_products(
+    shop_id: int,
+    category_id: Optional[int] = None,
+    search: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+    include_inactive: bool = False,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all products for a specific shop"""
+    product_service = ProductService(db)
+    return await product_service.get_all(
+        skip, limit, shop_id, category_id, search,
+        not include_inactive, include_inactive
+    )
+
+
+@router.get("/shops/{shop_id}/low-stock")
+async def get_shop_low_stock(shop_id: int, db: AsyncSession = Depends(get_db)):
+    """Get low stock products for a specific shop"""
+    product_service = ProductService(db)
+    products = await product_service.get_low_stock(shop_id)
+    return [
+        {
+            "id": p.id,
+            "name": p.name,
+            "sku": p.sku,
+            "quantity": p.quantity,
+            "min_stock_level": p.min_stock_level
+        }
+        for p in products
+    ]
+
+
+@router.get("/shops/{shop_id}/orders")
+async def get_shop_orders(
+    shop_id: int,
+    status: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all orders for a specific shop"""
+    order_service = OrderService(db)
+    return await order_service.get_by_shop(shop_id, status, skip, limit)
+
+
+@router.post("/shops", response_model=ShopResponse)
+async def create_shop(data: ShopCreate, db: AsyncSession = Depends(get_db)):
+    service = ShopService(db)
+    shop = await service.create(data)
+    return shop
+
+
+@router.put("/shops/{shop_id}", response_model=ShopResponse)
+async def update_shop(shop_id: int, data: ShopUpdate, db: AsyncSession = Depends(get_db)):
+    service = ShopService(db)
+    shop = await service.update(shop_id, data)
+    if not shop:
+        raise HTTPException(status_code=404, detail="Shop not found")
+    return shop
+
+
+@router.delete("/shops/{shop_id}")
+async def delete_shop(shop_id: int, db: AsyncSession = Depends(get_db)):
+    service = ShopService(db)
+    success = await service.delete(shop_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Shop not found")
+    return {"message": "Shop deleted"}
 
 
 # ============== PRODUCT ENDPOINTS ==============
