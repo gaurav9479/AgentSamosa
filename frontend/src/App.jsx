@@ -470,13 +470,13 @@ function App() {
           <div className="demo-accounts">
             <h3>Demo Accounts</h3>
             <div className="demo-list">
-              <button onClick={() => setLoginForm({ email: 'admin@kommandai.com', password: 'admin123' })}>
+              <button onClick={() => setLoginForm({ email: 'superadmin@kommandai.com', password: 'qwert12345' })}>
                 Super Admin
               </button>
-              <button onClick={() => setLoginForm({ email: 'shop@glamour.com', password: 'shop123' })}>
-                Shop Owner
+              <button onClick={() => setLoginForm({ email: 'admin@kommandai.com', password: 'qwert12345' })}>
+                Admin
               </button>
-              <button onClick={() => setLoginForm({ email: 'customer@example.com', password: 'customer123' })}>
+              <button onClick={() => setLoginForm({ email: 'customer@kommandai.com', password: 'qwert12345' })}>
                 Customer
               </button>
             </div>
