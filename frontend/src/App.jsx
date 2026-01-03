@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from 'recharts'
 
 const COLORS = ['#3b82f6', '#22c55e', '#f97316', '#8b5cf6', '#ef4444', '#06b6d4']
+const PAGE_SIZE = 20
 
 function App() {
   // Auth state
@@ -14,9 +15,14 @@ function App() {
   // Customer view states
   const [shopCategories, setShopCategories] = useState([])
   const [shops, setShops] = useState([])
+  const [shopsHasMore, setShopsHasMore] = useState(true)
+  const [shopsPage, setShopsPage] = useState(0)
+  const [shopsSearch, setShopsSearch] = useState('')
   const [selectedShopCategory, setSelectedShopCategory] = useState(null)
   const [selectedShop, setSelectedShop] = useState(null)
   const [shopProducts, setShopProducts] = useState([])
+  const [productsHasMore, setProductsHasMore] = useState(true)
+  const [productsPage, setProductsPage] = useState(0)
   const [cart, setCart] = useState([])
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -24,14 +30,28 @@ function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [dashboardStats, setDashboardStats] = useState({})
   const [products, setProducts] = useState([])
+  const [adminProductsPage, setAdminProductsPage] = useState(0)
+  const [adminProductsHasMore, setAdminProductsHasMore] = useState(true)
+  const [adminProductSearch, setAdminProductSearch] = useState('')
   const [orders, setOrders] = useState([])
+  const [ordersPage, setOrdersPage] = useState(0)
+  const [ordersHasMore, setOrdersHasMore] = useState(true)
+  const [orderSearch, setOrderSearch] = useState('')
+  const [orderStatusFilter, setOrderStatusFilter] = useState('')
   const [lowStockProducts, setLowStockProducts] = useState([])
   const [categories, setCategories] = useState([])
 
   // Super Admin states
   const [platformStats, setPlatformStats] = useState({})
   const [allShops, setAllShops] = useState([])
+  const [allShopsPage, setAllShopsPage] = useState(0)
+  const [allShopsHasMore, setAllShopsHasMore] = useState(true)
+  const [shopSearch, setShopSearch] = useState('')
   const [allUsers, setAllUsers] = useState([])
+  const [usersPage, setUsersPage] = useState(0)
+  const [usersHasMore, setUsersHasMore] = useState(true)
+  const [userSearch, setUserSearch] = useState('')
+  const [userRoleFilter, setUserRoleFilter] = useState('')
   const [superAdminTab, setSuperAdminTab] = useState('overview')
 
   // UI states
@@ -39,6 +59,7 @@ function App() {
   const [logs, setLogs] = useState([])
   const [command, setCommand] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
 
   // Form states
   const [productForm, setProductForm] = useState({
@@ -50,11 +71,23 @@ function App() {
   const [editingProduct, setEditingProduct] = useState(null)
 
   const wsRef = useRef(null)
+  const observerRef = useRef(null)
+
+  // Infinite scroll callback
+  const lastItemRef = useCallback(node => {
+    if (isLoading) return
+    if (observerRef.current) observerRef.current.disconnect()
+    observerRef.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting) {
+        // Trigger load more based on current context
+      }
+    })
+    if (node) observerRef.current.observe(node)
+  }, [isLoading])
 
   useEffect(() => {
     connectWebSocket()
     fetchShopCategories()
-    // Check for saved user
     const savedUser = localStorage.getItem('kommandai_user')
     if (savedUser) {
       setUser(JSON.parse(savedUser))
@@ -64,25 +97,91 @@ function App() {
 
   useEffect(() => {
     if (selectedShopCategory) {
-      fetchShopsByCategory(selectedShopCategory)
+      setShops([])
+      setShopsPage(0)
+      setShopsHasMore(true)
+      fetchShopsByCategory(selectedShopCategory, 0, true)
     }
   }, [selectedShopCategory])
 
   useEffect(() => {
     if (selectedShop) {
-      fetchShopProducts(selectedShop)
+      setShopProducts([])
+      setProductsPage(0)
+      setProductsHasMore(true)
+      fetchShopProducts(selectedShop, 0, true)
     }
   }, [selectedShop])
 
   useEffect(() => {
     if (user) {
       if (user.role === 'super_admin') {
-        fetchPlatformData()
+        fetchPlatformStats()
+        fetchAllShops(0, true)
+        fetchAllUsers(0, true)
       } else if (user.role === 'admin' && user.shop_id) {
-        fetchAdminData(user.shop_id)
+        fetchAdminDashboard(user.shop_id)
+        fetchAdminProducts(user.shop_id, 0, true)
+        fetchAdminOrders(user.shop_id, 0, true)
       }
     }
   }, [user])
+
+  // Debounced search effects
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (selectedShop) {
+        setShopProducts([])
+        setProductsPage(0)
+        fetchShopProducts(selectedShop, 0, true)
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (user?.role === 'admin' && user.shop_id) {
+        setProducts([])
+        setAdminProductsPage(0)
+        fetchAdminProducts(user.shop_id, 0, true)
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [adminProductSearch])
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (user?.role === 'admin' && user.shop_id) {
+        setOrders([])
+        setOrdersPage(0)
+        fetchAdminOrders(user.shop_id, 0, true)
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [orderSearch, orderStatusFilter])
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (user?.role === 'super_admin') {
+        setAllShops([])
+        setAllShopsPage(0)
+        fetchAllShops(0, true)
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [shopSearch])
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (user?.role === 'super_admin') {
+        setAllUsers([])
+        setUsersPage(0)
+        fetchAllUsers(0, true)
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [userSearch, userRoleFilter])
 
   const connectWebSocket = () => {
     const ws = new WebSocket(`ws://${window.location.hostname}:8000/api/ws`)
@@ -90,9 +189,10 @@ function App() {
     ws.onmessage = (e) => {
       const data = JSON.parse(e.data)
       if (data.type === 'action_result' || data.type === 'data_update') {
-        if (user?.role === 'admin' && user.shop_id) fetchAdminData(user.shop_id)
-        if (user?.role === 'super_admin') fetchPlatformData()
-        if (selectedShop) fetchShopProducts(selectedShop)
+        if (user?.role === 'admin' && user.shop_id) {
+          fetchAdminDashboard(user.shop_id)
+        }
+        if (user?.role === 'super_admin') fetchPlatformStats()
       }
     }
     ws.onclose = () => { setIsConnected(false); setTimeout(connectWebSocket, 3000) }
@@ -161,51 +261,146 @@ function App() {
     } catch (err) { console.error('Error fetching shop categories:', err) }
   }
 
-  const fetchShopsByCategory = async (categoryId) => {
+  const fetchShopsByCategory = async (categoryId, page = 0, reset = false) => {
+    if (isLoading) return
+    setIsLoading(true)
     try {
-      const res = await fetch(`/api/shops/by-category/${categoryId}`)
-      if (res.ok) setShops(await res.json())
-    } catch (err) { console.error('Error fetching shops:', err) }
-  }
-
-  const fetchShopProducts = async (shopId) => {
-    try {
-      let url = `/api/shops/${shopId}/products`
-      if (searchQuery) url += `?search=${encodeURIComponent(searchQuery)}`
+      let url = `/api/shops/by-category/${categoryId}?skip=${page * PAGE_SIZE}&limit=${PAGE_SIZE}`
+      if (shopsSearch) url += `&search=${encodeURIComponent(shopsSearch)}`
       const res = await fetch(url)
-      if (res.ok) setShopProducts(await res.json())
-    } catch (err) { console.error('Error fetching products:', err) }
+      if (res.ok) {
+        const data = await res.json()
+        setShops(prev => reset ? data : [...prev, ...data])
+        setShopsHasMore(data.length === PAGE_SIZE)
+        setShopsPage(page)
+      }
+    } catch (err) { console.error('Error fetching shops:', err) }
+    finally { setIsLoading(false) }
   }
 
-  const fetchAdminData = async (shopId) => {
-    if (!shopId) return
+  const fetchShopProducts = async (shopId, page = 0, reset = false) => {
+    if (isLoading) return
+    setIsLoading(true)
     try {
-      const [dashRes, prodRes, ordRes, lowRes, catRes] = await Promise.all([
+      let url = `/api/shops/${shopId}/products?skip=${page * PAGE_SIZE}&limit=${PAGE_SIZE}`
+      if (searchQuery) url += `&search=${encodeURIComponent(searchQuery)}`
+      const res = await fetch(url)
+      if (res.ok) {
+        const data = await res.json()
+        setShopProducts(prev => reset ? data : [...prev, ...data])
+        setProductsHasMore(data.length === PAGE_SIZE)
+        setProductsPage(page)
+      }
+    } catch (err) { console.error('Error fetching products:', err) }
+    finally { setIsLoading(false) }
+  }
+
+  const fetchAdminDashboard = async (shopId) => {
+    try {
+      const [dashRes, lowRes, catRes] = await Promise.all([
         fetch(`/api/shops/${shopId}/dashboard`),
-        fetch(`/api/shops/${shopId}/products?include_inactive=true`),
-        fetch(`/api/shops/${shopId}/orders`),
         fetch(`/api/shops/${shopId}/low-stock`),
         fetch('/api/categories')
       ])
       if (dashRes.ok) setDashboardStats(await dashRes.json())
-      if (prodRes.ok) setProducts(await prodRes.json())
-      if (ordRes.ok) setOrders(await ordRes.json())
       if (lowRes.ok) setLowStockProducts(await lowRes.json())
       if (catRes.ok) setCategories(await catRes.json())
-    } catch (err) { console.error('Error fetching admin data:', err) }
+    } catch (err) { console.error('Error fetching dashboard:', err) }
   }
 
-  const fetchPlatformData = async () => {
+  const fetchAdminProducts = async (shopId, page = 0, reset = false) => {
+    if (isLoading) return
+    setIsLoading(true)
     try {
-      const [statsRes, shopsRes, usersRes] = await Promise.all([
-        fetch('/api/platform/stats'),
-        fetch('/api/platform/shops'),
-        fetch('/api/users')
-      ])
-      if (statsRes.ok) setPlatformStats(await statsRes.json())
-      if (shopsRes.ok) setAllShops(await shopsRes.json())
-      if (usersRes.ok) setAllUsers(await usersRes.json())
-    } catch (err) { console.error('Error fetching platform data:', err) }
+      let url = `/api/shops/${shopId}/products?include_inactive=true&skip=${page * PAGE_SIZE}&limit=${PAGE_SIZE}`
+      if (adminProductSearch) url += `&search=${encodeURIComponent(adminProductSearch)}`
+      const res = await fetch(url)
+      if (res.ok) {
+        const data = await res.json()
+        setProducts(prev => reset ? data : [...prev, ...data])
+        setAdminProductsHasMore(data.length === PAGE_SIZE)
+        setAdminProductsPage(page)
+      }
+    } catch (err) { console.error('Error fetching products:', err) }
+    finally { setIsLoading(false) }
+  }
+
+  const fetchAdminOrders = async (shopId, page = 0, reset = false) => {
+    if (isLoading) return
+    setIsLoading(true)
+    try {
+      let url = `/api/shops/${shopId}/orders?skip=${page * PAGE_SIZE}&limit=${PAGE_SIZE}`
+      if (orderStatusFilter) url += `&status=${orderStatusFilter}`
+      const res = await fetch(url)
+      if (res.ok) {
+        let data = await res.json()
+        if (orderSearch) {
+          data = data.filter(o =>
+            o.customer_name?.toLowerCase().includes(orderSearch.toLowerCase()) ||
+            o.product_name?.toLowerCase().includes(orderSearch.toLowerCase()) ||
+            o.id.toString().includes(orderSearch)
+          )
+        }
+        setOrders(prev => reset ? data : [...prev, ...data])
+        setOrdersHasMore(data.length === PAGE_SIZE)
+        setOrdersPage(page)
+      }
+    } catch (err) { console.error('Error fetching orders:', err) }
+    finally { setIsLoading(false) }
+  }
+
+  const fetchPlatformStats = async () => {
+    try {
+      const res = await fetch('/api/platform/stats')
+      if (res.ok) setPlatformStats(await res.json())
+    } catch (err) { console.error('Error fetching platform stats:', err) }
+  }
+
+  const fetchAllShops = async (page = 0, reset = false) => {
+    if (isLoading) return
+    setIsLoading(true)
+    try {
+      let url = `/api/platform/shops?skip=${page * PAGE_SIZE}&limit=${PAGE_SIZE}`
+      if (shopSearch) url += `&search=${encodeURIComponent(shopSearch)}`
+      const res = await fetch(url)
+      if (res.ok) {
+        let data = await res.json()
+        if (shopSearch) {
+          data = data.filter(s =>
+            s.name?.toLowerCase().includes(shopSearch.toLowerCase()) ||
+            s.owner_email?.toLowerCase().includes(shopSearch.toLowerCase()) ||
+            s.city?.toLowerCase().includes(shopSearch.toLowerCase())
+          )
+        }
+        setAllShops(prev => reset ? data : [...prev, ...data])
+        setAllShopsHasMore(data.length === PAGE_SIZE)
+        setAllShopsPage(page)
+      }
+    } catch (err) { console.error('Error fetching shops:', err) }
+    finally { setIsLoading(false) }
+  }
+
+  const fetchAllUsers = async (page = 0, reset = false) => {
+    if (isLoading) return
+    setIsLoading(true)
+    try {
+      let url = `/api/users?skip=${page * PAGE_SIZE}&limit=${PAGE_SIZE}`
+      if (userRoleFilter) url += `&role=${userRoleFilter}`
+      const res = await fetch(url)
+      if (res.ok) {
+        let data = await res.json()
+        if (userSearch) {
+          data = data.filter(u =>
+            u.name?.toLowerCase().includes(userSearch.toLowerCase()) ||
+            u.email?.toLowerCase().includes(userSearch.toLowerCase())
+          )
+        }
+        setAllUsers(prev => reset ? data : [...prev, ...data])
+        setUsersHasMore(data.length === PAGE_SIZE)
+        setUsersPage(page)
+      }
+    } catch (err) { console.error('Error fetching users:', err) }
+    finally { setIsLoading(false) }
   }
 
   const addLog = (message, type = 'info') => {
@@ -227,8 +422,15 @@ function App() {
       const data = await res.json()
       if (res.ok) {
         addLog(`Done: ${data.message || 'Command executed'}`, 'success')
-        if (user?.role === 'admin' && user.shop_id) fetchAdminData(user.shop_id)
-        if (user?.role === 'super_admin') fetchPlatformData()
+        if (user?.role === 'admin' && user.shop_id) {
+          fetchAdminDashboard(user.shop_id)
+          fetchAdminProducts(user.shop_id, 0, true)
+          fetchAdminOrders(user.shop_id, 0, true)
+        }
+        if (user?.role === 'super_admin') {
+          fetchPlatformStats()
+          fetchAllShops(0, true)
+        }
       } else {
         addLog(`Error: ${data.detail || 'Failed'}`, 'error')
       }
@@ -264,7 +466,8 @@ function App() {
       if (res.ok) {
         addLog(`Product "${productForm.name}" created`, 'success')
         resetProductForm()
-        fetchAdminData(user.shop_id)
+        fetchAdminProducts(user.shop_id, 0, true)
+        fetchAdminDashboard(user.shop_id)
       } else {
         const err = await res.json()
         addLog(`Error: ${err.detail}`, 'error')
@@ -299,7 +502,8 @@ function App() {
         addLog(`Product "${productForm.name}" updated`, 'success')
         setEditingProduct(null)
         resetProductForm()
-        fetchAdminData(user.shop_id)
+        fetchAdminProducts(user.shop_id, 0, true)
+        fetchAdminDashboard(user.shop_id)
       }
     } catch (err) { addLog(`Error: ${err.message}`, 'error') }
   }
@@ -308,7 +512,8 @@ function App() {
     if (!confirm('Delete this product?')) return
     await fetch(`/api/products/${id}`, { method: 'DELETE' })
     addLog('Product deleted', 'success')
-    fetchAdminData(user.shop_id)
+    fetchAdminProducts(user.shop_id, 0, true)
+    fetchAdminDashboard(user.shop_id)
   }
 
   const editProduct = (p) => {
@@ -340,7 +545,8 @@ function App() {
     const res = await fetch(`/api/platform/shops/${shopId}/verify`, { method: 'PATCH' })
     if (res.ok) {
       addLog('Shop verified', 'success')
-      fetchPlatformData()
+      fetchAllShops(0, true)
+      fetchPlatformStats()
     }
   }
 
@@ -349,7 +555,7 @@ function App() {
     const res = await fetch(`/api/platform/shops/${shopId}/suspend`, { method: 'PATCH' })
     if (res.ok) {
       addLog('Shop suspended', 'success')
-      fetchPlatformData()
+      fetchAllShops(0, true)
     }
   }
 
@@ -357,7 +563,7 @@ function App() {
     const res = await fetch(`/api/platform/shops/${shopId}/activate`, { method: 'PATCH' })
     if (res.ok) {
       addLog('Shop activated', 'success')
-      fetchPlatformData()
+      fetchAllShops(0, true)
     }
   }
 
@@ -376,13 +582,34 @@ function App() {
   const removeFromCart = (id) => setCart(prev => prev.filter(i => i.id !== id))
   const cartTotal = cart.reduce((sum, i) => sum + i.price * i.qty, 0)
 
-  // Filtered products for search
-  const filteredProducts = searchQuery
-    ? shopProducts.filter(p =>
-        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.brand?.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : shopProducts
+  // Search/Filter bar component
+  const SearchFilterBar = ({ search, setSearch, placeholder, filters }) => (
+    <div className="search-filter-bar">
+      <div className="search-input-wrapper">
+        <span className="search-icon">🔍</span>
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder={placeholder}
+          className="search-input"
+        />
+        {search && <button className="clear-btn" onClick={() => setSearch('')}>×</button>}
+      </div>
+      {filters}
+    </div>
+  )
+
+  // Load More button component
+  const LoadMoreButton = ({ hasMore, isLoading, onClick }) => (
+    hasMore && (
+      <div className="load-more-wrapper">
+        <button className="load-more-btn" onClick={onClick} disabled={isLoading}>
+          {isLoading ? 'Loading...' : 'Load More'}
+        </button>
+      </div>
+    )
+  )
 
   // ============== LOGIN PAGE ==============
   if (!user) {
@@ -400,43 +627,22 @@ function App() {
               {loginError && <div className="error-msg">{loginError}</div>}
               <div className="form-group">
                 <label>Name</label>
-                <input
-                  type="text"
-                  value={registerForm.name}
-                  onChange={e => setRegisterForm({...registerForm, name: e.target.value})}
-                  required
-                />
+                <input type="text" value={registerForm.name} onChange={e => setRegisterForm({...registerForm, name: e.target.value})} required />
               </div>
               <div className="form-group">
                 <label>Email</label>
-                <input
-                  type="email"
-                  value={registerForm.email}
-                  onChange={e => setRegisterForm({...registerForm, email: e.target.value})}
-                  required
-                />
+                <input type="email" value={registerForm.email} onChange={e => setRegisterForm({...registerForm, email: e.target.value})} required />
               </div>
               <div className="form-group">
                 <label>Phone</label>
-                <input
-                  type="tel"
-                  value={registerForm.phone}
-                  onChange={e => setRegisterForm({...registerForm, phone: e.target.value})}
-                />
+                <input type="tel" value={registerForm.phone} onChange={e => setRegisterForm({...registerForm, phone: e.target.value})} />
               </div>
               <div className="form-group">
                 <label>Password</label>
-                <input
-                  type="password"
-                  value={registerForm.password}
-                  onChange={e => setRegisterForm({...registerForm, password: e.target.value})}
-                  required
-                />
+                <input type="password" value={registerForm.password} onChange={e => setRegisterForm({...registerForm, password: e.target.value})} required />
               </div>
               <button type="submit" className="login-btn">Register</button>
-              <p className="switch-auth">
-                Already have an account? <button type="button" onClick={() => setShowRegister(false)}>Login</button>
-              </p>
+              <p className="switch-auth">Already have an account? <button type="button" onClick={() => setShowRegister(false)}>Login</button></p>
             </form>
           ) : (
             <form onSubmit={handleLogin} className="login-form">
@@ -444,41 +650,23 @@ function App() {
               {loginError && <div className="error-msg">{loginError}</div>}
               <div className="form-group">
                 <label>Email</label>
-                <input
-                  type="email"
-                  value={loginForm.email}
-                  onChange={e => setLoginForm({...loginForm, email: e.target.value})}
-                  required
-                />
+                <input type="email" value={loginForm.email} onChange={e => setLoginForm({...loginForm, email: e.target.value})} required />
               </div>
               <div className="form-group">
                 <label>Password</label>
-                <input
-                  type="password"
-                  value={loginForm.password}
-                  onChange={e => setLoginForm({...loginForm, password: e.target.value})}
-                  required
-                />
+                <input type="password" value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} required />
               </div>
               <button type="submit" className="login-btn">Login</button>
-              <p className="switch-auth">
-                New here? <button type="button" onClick={() => setShowRegister(true)}>Create Account</button>
-              </p>
+              <p className="switch-auth">New here? <button type="button" onClick={() => setShowRegister(true)}>Create Account</button></p>
             </form>
           )}
 
           <div className="demo-accounts">
             <h3>Demo Accounts</h3>
             <div className="demo-list">
-              <button onClick={() => setLoginForm({ email: 'superadmin@kommandai.com', password: 'qwert12345' })}>
-                Super Admin
-              </button>
-              <button onClick={() => setLoginForm({ email: 'admin@kommandai.com', password: 'qwert12345' })}>
-                Admin
-              </button>
-              <button onClick={() => setLoginForm({ email: 'customer@kommandai.com', password: 'qwert12345' })}>
-                Customer
-              </button>
+              <button onClick={() => setLoginForm({ email: 'superadmin@kommandai.com', password: 'qwert12345' })}>Super Admin</button>
+              <button onClick={() => setLoginForm({ email: 'admin@kommandai.com', password: 'qwert12345' })}>Admin</button>
+              <button onClick={() => setLoginForm({ email: 'customer@kommandai.com', password: 'qwert12345' })}>Customer</button>
             </div>
           </div>
         </div>
@@ -501,174 +689,108 @@ function App() {
           </div>
         </header>
 
-        {/* AI Command Panel */}
         <div className="command-panel">
           <form onSubmit={sendCommand} className="command-form">
             <div className="command-input-wrapper">
               <span className="command-icon">🤖</span>
-              <input
-                type="text"
-                value={command}
-                onChange={e => setCommand(e.target.value)}
-                placeholder="Platform commands... (e.g., 'Show all unverified shops')"
-                disabled={isProcessing}
-                className="command-input"
-              />
-              <button type="submit" disabled={isProcessing || !command.trim()} className="command-btn">
-                {isProcessing ? '...' : 'Go'}
-              </button>
+              <input type="text" value={command} onChange={e => setCommand(e.target.value)} placeholder="Platform commands..." disabled={isProcessing} className="command-input" />
+              <button type="submit" disabled={isProcessing || !command.trim()} className="command-btn">{isProcessing ? '...' : 'Go'}</button>
             </div>
           </form>
         </div>
 
-        {/* Platform Stats */}
         <div className="stats-grid platform-stats">
-          <div className="stat-card primary">
-            <div className="stat-value">{platformStats.total_shops || 0}</div>
-            <div className="stat-label">Total Shops</div>
-          </div>
-          <div className="stat-card success">
-            <div className="stat-value">{platformStats.verified_shops || 0}</div>
-            <div className="stat-label">Verified Shops</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-value">{platformStats.total_shop_owners || 0}</div>
-            <div className="stat-label">Shop Owners</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-value">{platformStats.total_customers || 0}</div>
-            <div className="stat-label">Customers</div>
-          </div>
-          <div className="stat-card success">
-            <div className="stat-value">${platformStats.platform_revenue?.toLocaleString() || 0}</div>
-            <div className="stat-label">Total Revenue</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-value">{platformStats.total_users || 0}</div>
-            <div className="stat-label">Total Users</div>
-          </div>
+          <div className="stat-card primary"><div className="stat-value">{platformStats.total_shops || 0}</div><div className="stat-label">Total Shops</div></div>
+          <div className="stat-card success"><div className="stat-value">{platformStats.verified_shops || 0}</div><div className="stat-label">Verified Shops</div></div>
+          <div className="stat-card"><div className="stat-value">{platformStats.total_shop_owners || 0}</div><div className="stat-label">Shop Owners</div></div>
+          <div className="stat-card"><div className="stat-value">{platformStats.total_customers || 0}</div><div className="stat-label">Customers</div></div>
+          <div className="stat-card success"><div className="stat-value">${platformStats.platform_revenue?.toLocaleString() || 0}</div><div className="stat-label">Total Revenue</div></div>
+          <div className="stat-card"><div className="stat-value">{platformStats.total_users || 0}</div><div className="stat-label">Total Users</div></div>
         </div>
 
-        {/* Super Admin Tabs */}
         <div className="tabs">
           {['overview', 'shops', 'users', 'categories'].map(tab => (
-            <button
-              key={tab}
-              className={`tab ${superAdminTab === tab ? 'active' : ''}`}
-              onClick={() => setSuperAdminTab(tab)}
-            >
+            <button key={tab} className={`tab ${superAdminTab === tab ? 'active' : ''}`} onClick={() => setSuperAdminTab(tab)}>
               {tab.charAt(0).toUpperCase() + tab.slice(1)}
             </button>
           ))}
         </div>
 
-        {/* Overview Tab */}
         {superAdminTab === 'overview' && (
           <div className="dashboard-grid">
             <div className="panel">
               <h2>Pending Verification</h2>
               <div className="shop-list">
-                {allShops.filter(s => !s.is_verified).map(shop => (
+                {allShops.filter(s => !s.is_verified).slice(0, 5).map(shop => (
                   <div key={shop.id} className="shop-item">
-                    <div className="shop-info">
-                      <strong>{shop.name}</strong>
-                      <span>{shop.owner_email}</span>
-                      <span className="city">{shop.city}</span>
-                    </div>
-                    <div className="shop-actions">
-                      <button className="verify-btn" onClick={() => verifyShop(shop.id)}>Verify</button>
-                    </div>
+                    <div className="shop-info"><strong>{shop.name}</strong><span>{shop.owner_email}</span><span className="city">{shop.city}</span></div>
+                    <div className="shop-actions"><button className="verify-btn" onClick={() => verifyShop(shop.id)}>Verify</button></div>
                   </div>
                 ))}
-                {allShops.filter(s => !s.is_verified).length === 0 && (
-                  <p className="empty">No shops pending verification</p>
-                )}
+                {allShops.filter(s => !s.is_verified).length === 0 && <p className="empty">No shops pending verification</p>}
               </div>
             </div>
-
             <div className="panel logs-panel">
               <h2>Activity Log</h2>
               <div className="log-list">
                 {logs.slice(0, 10).map((log, i) => (
-                  <div key={i} className={`log-item ${log.type}`}>
-                    <span className="log-time">{log.time}</span>
-                    <span>{log.message}</span>
-                  </div>
+                  <div key={i} className={`log-item ${log.type}`}><span className="log-time">{log.time}</span><span>{log.message}</span></div>
                 ))}
               </div>
             </div>
           </div>
         )}
 
-        {/* Shops Tab */}
         {superAdminTab === 'shops' && (
           <div className="data-panel">
+            <SearchFilterBar search={shopSearch} setSearch={setShopSearch} placeholder="Search shops by name, email, city..." />
             <h2>All Shops ({allShops.length})</h2>
             <div className="data-table">
               <table>
                 <thead>
-                  <tr>
-                    <th>Shop Name</th>
-                    <th>Owner</th>
-                    <th>City</th>
-                    <th>Orders</th>
-                    <th>Revenue</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
+                  <tr><th>Shop Name</th><th>Owner</th><th>City</th><th>Orders</th><th>Revenue</th><th>Status</th><th>Actions</th></tr>
                 </thead>
                 <tbody>
                   {allShops.map(shop => (
                     <tr key={shop.id} className={!shop.is_active ? 'suspended' : ''}>
-                      <td>
-                        <div className="shop-cell">
-                          <strong>{shop.name}</strong>
-                          {shop.is_verified && <span className="verified-badge">✓</span>}
-                        </div>
-                      </td>
+                      <td><div className="shop-cell"><strong>{shop.name}</strong>{shop.is_verified && <span className="verified-badge">✓</span>}</div></td>
                       <td>{shop.owner_email || '-'}</td>
                       <td>{shop.city || '-'}</td>
                       <td>{shop.total_orders}</td>
                       <td>${shop.total_revenue?.toLocaleString()}</td>
+                      <td><span className={`status ${shop.is_active ? 'active' : 'suspended'}`}>{shop.is_active ? 'Active' : 'Suspended'}</span></td>
                       <td>
-                        <span className={`status ${shop.is_active ? 'active' : 'suspended'}`}>
-                          {shop.is_active ? 'Active' : 'Suspended'}
-                        </span>
-                      </td>
-                      <td>
-                        {!shop.is_verified && (
-                          <button className="verify-btn" onClick={() => verifyShop(shop.id)}>Verify</button>
-                        )}
-                        {shop.is_active ? (
-                          <button className="suspend-btn" onClick={() => suspendShop(shop.id)}>Suspend</button>
-                        ) : (
-                          <button className="activate-btn" onClick={() => activateShop(shop.id)}>Activate</button>
-                        )}
+                        {!shop.is_verified && <button className="verify-btn" onClick={() => verifyShop(shop.id)}>Verify</button>}
+                        {shop.is_active ? <button className="suspend-btn" onClick={() => suspendShop(shop.id)}>Suspend</button> : <button className="activate-btn" onClick={() => activateShop(shop.id)}>Activate</button>}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+            <LoadMoreButton hasMore={allShopsHasMore} isLoading={isLoading} onClick={() => fetchAllShops(allShopsPage + 1)} />
           </div>
         )}
 
-        {/* Users Tab */}
         {superAdminTab === 'users' && (
           <div className="data-panel">
+            <SearchFilterBar
+              search={userSearch}
+              setSearch={setUserSearch}
+              placeholder="Search users by name or email..."
+              filters={
+                <select value={userRoleFilter} onChange={e => setUserRoleFilter(e.target.value)} className="filter-select">
+                  <option value="">All Roles</option>
+                  <option value="super_admin">Super Admin</option>
+                  <option value="admin">Admin</option>
+                  <option value="customer">Customer</option>
+                </select>
+              }
+            />
             <h2>All Users ({allUsers.length})</h2>
             <div className="data-table">
               <table>
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Role</th>
-                    <th>Phone</th>
-                    <th>Status</th>
-                    <th>Created</th>
-                  </tr>
-                </thead>
+                <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Phone</th><th>Status</th><th>Created</th></tr></thead>
                 <tbody>
                   {allUsers.map(u => (
                     <tr key={u.id}>
@@ -676,21 +798,17 @@ function App() {
                       <td>{u.email}</td>
                       <td><span className={`role ${u.role}`}>{u.role}</span></td>
                       <td>{u.phone || '-'}</td>
-                      <td>
-                        <span className={`status ${u.is_active ? 'active' : 'inactive'}`}>
-                          {u.is_active ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
+                      <td><span className={`status ${u.is_active ? 'active' : 'inactive'}`}>{u.is_active ? 'Active' : 'Inactive'}</span></td>
                       <td>{new Date(u.created_at).toLocaleDateString()}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+            <LoadMoreButton hasMore={usersHasMore} isLoading={isLoading} onClick={() => fetchAllUsers(usersPage + 1)} />
           </div>
         )}
 
-        {/* Categories Tab */}
         {superAdminTab === 'categories' && (
           <div className="data-panel">
             <h2>Shop Categories</h2>
@@ -698,11 +816,7 @@ function App() {
               {shopCategories.map(cat => (
                 <div key={cat.id} className="category-admin-card">
                   <span className="cat-icon">{cat.icon}</span>
-                  <div className="cat-info">
-                    <h3>{cat.name}</h3>
-                    <p>{cat.description}</p>
-                    <span className="shop-count">{cat.shop_count} shops</span>
-                  </div>
+                  <div className="cat-info"><h3>{cat.name}</h3><p>{cat.description}</p><span className="shop-count">{cat.shop_count} shops</span></div>
                 </div>
               ))}
             </div>
@@ -722,64 +836,31 @@ function App() {
             <p>Manage your shop</p>
           </div>
           <div className="header-right">
-            <div className="connection-status">
-              <span className={`dot ${isConnected ? 'connected' : ''}`}></span>
-              {isConnected ? 'Live' : 'Offline'}
-            </div>
+            <div className="connection-status"><span className={`dot ${isConnected ? 'connected' : ''}`}></span>{isConnected ? 'Live' : 'Offline'}</div>
             <span className="user-info">{user.name}</span>
             <button className="logout-btn" onClick={logout}>Logout</button>
           </div>
         </header>
 
-        {/* AI Command Panel */}
         <div className="command-panel">
           <form onSubmit={sendCommand} className="command-form">
             <div className="command-input-wrapper">
               <span className="command-icon">🤖</span>
-              <input
-                type="text"
-                value={command}
-                onChange={e => setCommand(e.target.value)}
-                placeholder="Tell me what to do... (e.g., 'Add product Swiss Beauty Lipstick price 299')"
-                disabled={isProcessing}
-                className="command-input"
-              />
-              <button type="submit" disabled={isProcessing || !command.trim()} className="command-btn">
-                {isProcessing ? '...' : 'Go'}
-              </button>
+              <input type="text" value={command} onChange={e => setCommand(e.target.value)} placeholder="Tell me what to do..." disabled={isProcessing} className="command-input" />
+              <button type="submit" disabled={isProcessing || !command.trim()} className="command-btn">{isProcessing ? '...' : 'Go'}</button>
             </div>
           </form>
         </div>
 
-        {/* Stats Dashboard */}
         <div className="stats-grid">
-          <div className="stat-card">
-            <div className="stat-value">{dashboardStats.total_products || 0}</div>
-            <div className="stat-label">Products</div>
-          </div>
-          <div className="stat-card success">
-            <div className="stat-value">${dashboardStats.total_revenue?.toLocaleString() || 0}</div>
-            <div className="stat-label">Total Revenue</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-value">{dashboardStats.total_orders || 0}</div>
-            <div className="stat-label">Orders</div>
-          </div>
-          <div className="stat-card warning">
-            <div className="stat-value">{dashboardStats.pending_orders || 0}</div>
-            <div className="stat-label">Pending</div>
-          </div>
-          <div className="stat-card danger">
-            <div className="stat-value">{dashboardStats.low_stock_count || 0}</div>
-            <div className="stat-label">Low Stock</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-value">${dashboardStats.inventory_value?.toLocaleString() || 0}</div>
-            <div className="stat-label">Inventory Value</div>
-          </div>
+          <div className="stat-card"><div className="stat-value">{dashboardStats.total_products || 0}</div><div className="stat-label">Products</div></div>
+          <div className="stat-card success"><div className="stat-value">${dashboardStats.total_revenue?.toLocaleString() || 0}</div><div className="stat-label">Total Revenue</div></div>
+          <div className="stat-card"><div className="stat-value">{dashboardStats.total_orders || 0}</div><div className="stat-label">Orders</div></div>
+          <div className="stat-card warning"><div className="stat-value">{dashboardStats.pending_orders || 0}</div><div className="stat-label">Pending</div></div>
+          <div className="stat-card danger"><div className="stat-value">{dashboardStats.low_stock_count || 0}</div><div className="stat-label">Low Stock</div></div>
+          <div className="stat-card"><div className="stat-value">${dashboardStats.inventory_value?.toLocaleString() || 0}</div><div className="stat-label">Inventory Value</div></div>
         </div>
 
-        {/* Admin Tabs */}
         <div className="tabs">
           {['dashboard', 'products', 'orders'].map(tab => (
             <button key={tab} className={`tab ${activeTab === tab ? 'active' : ''}`} onClick={() => setActiveTab(tab)}>
@@ -788,108 +869,63 @@ function App() {
           ))}
         </div>
 
-        {/* Dashboard Tab */}
         {activeTab === 'dashboard' && (
           <div className="dashboard-grid">
             <div className="panel alerts-panel">
               <h2>Low Stock Alerts</h2>
-              {lowStockProducts.length === 0 ? (
-                <p className="empty">All products are well stocked</p>
-              ) : (
+              {lowStockProducts.length === 0 ? <p className="empty">All products are well stocked</p> : (
                 <div className="alert-list">
                   {lowStockProducts.map(p => (
                     <div key={p.id} className="alert-item">
                       <span className="alert-name">{p.name}</span>
                       <span className="alert-sku">{p.sku}</span>
-                      <span className={`alert-qty ${p.quantity === 0 ? 'zero' : ''}`}>
-                        {p.quantity} left
-                      </span>
+                      <span className={`alert-qty ${p.quantity === 0 ? 'zero' : ''}`}>{p.quantity} left</span>
                       <button onClick={() => editProduct(products.find(prod => prod.id === p.id))}>Restock</button>
                     </div>
                   ))}
                 </div>
               )}
             </div>
-
             <div className="panel logs-panel">
               <h2>Recent Activity</h2>
               <div className="log-list">
                 {logs.slice(0, 10).map((log, i) => (
-                  <div key={i} className={`log-item ${log.type}`}>
-                    <span className="log-time">{log.time}</span>
-                    <span>{log.message}</span>
-                  </div>
+                  <div key={i} className={`log-item ${log.type}`}><span className="log-time">{log.time}</span><span>{log.message}</span></div>
                 ))}
               </div>
             </div>
           </div>
         )}
 
-        {/* Products Tab */}
         {activeTab === 'products' && (
           <div className="tab-content">
             <div className="form-panel">
               <h2>{editingProduct ? 'Edit Product' : 'Add New Product'}</h2>
               <form onSubmit={editingProduct ? updateProduct : createProduct}>
                 <div className="form-section">
-                  <div className="form-group">
-                    <label>Product Name *</label>
-                    <input type="text" value={productForm.name} onChange={e => setProductForm({...productForm, name: e.target.value})} required />
-                  </div>
+                  <div className="form-group"><label>Product Name *</label><input type="text" value={productForm.name} onChange={e => setProductForm({...productForm, name: e.target.value})} required /></div>
                   <div className="form-row">
-                    <div className="form-group">
-                      <label>Brand</label>
-                      <input type="text" value={productForm.brand} onChange={e => setProductForm({...productForm, brand: e.target.value})} />
-                    </div>
-                    <div className="form-group">
-                      <label>SKU</label>
-                      <input type="text" value={productForm.sku} onChange={e => setProductForm({...productForm, sku: e.target.value})} />
-                    </div>
+                    <div className="form-group"><label>Brand</label><input type="text" value={productForm.brand} onChange={e => setProductForm({...productForm, brand: e.target.value})} /></div>
+                    <div className="form-group"><label>SKU</label><input type="text" value={productForm.sku} onChange={e => setProductForm({...productForm, sku: e.target.value})} /></div>
                   </div>
-                  <div className="form-group">
-                    <label>Description</label>
-                    <textarea value={productForm.description} onChange={e => setProductForm({...productForm, description: e.target.value})} />
-                  </div>
+                  <div className="form-group"><label>Description</label><textarea value={productForm.description} onChange={e => setProductForm({...productForm, description: e.target.value})} /></div>
                 </div>
-
                 <div className="form-section">
                   <h3>Pricing</h3>
                   <div className="form-row">
-                    <div className="form-group">
-                      <label>Selling Price *</label>
-                      <input type="number" step="0.01" value={productForm.price} onChange={e => setProductForm({...productForm, price: e.target.value})} required />
-                    </div>
-                    <div className="form-group">
-                      <label>Cost Price</label>
-                      <input type="number" step="0.01" value={productForm.cost_price} onChange={e => setProductForm({...productForm, cost_price: e.target.value})} />
-                    </div>
+                    <div className="form-group"><label>Selling Price *</label><input type="number" step="0.01" value={productForm.price} onChange={e => setProductForm({...productForm, price: e.target.value})} required /></div>
+                    <div className="form-group"><label>Cost Price</label><input type="number" step="0.01" value={productForm.cost_price} onChange={e => setProductForm({...productForm, cost_price: e.target.value})} /></div>
                   </div>
-                  {productForm.cost_price && productForm.price && (
-                    <div className="profit-margin">
-                      Profit Margin: {(((parseFloat(productForm.price) - parseFloat(productForm.cost_price)) / parseFloat(productForm.cost_price)) * 100).toFixed(1)}%
-                    </div>
-                  )}
+                  {productForm.cost_price && productForm.price && <div className="profit-margin">Profit Margin: {(((parseFloat(productForm.price) - parseFloat(productForm.cost_price)) / parseFloat(productForm.cost_price)) * 100).toFixed(1)}%</div>}
                 </div>
-
                 <div className="form-section">
                   <h3>Inventory</h3>
                   <div className="form-row">
-                    <div className="form-group">
-                      <label>Quantity *</label>
-                      <input type="number" value={productForm.quantity} onChange={e => setProductForm({...productForm, quantity: e.target.value})} required />
-                    </div>
-                    <div className="form-group">
-                      <label>Low Stock Alert</label>
-                      <input type="number" value={productForm.min_stock_level} onChange={e => setProductForm({...productForm, min_stock_level: e.target.value})} />
-                    </div>
+                    <div className="form-group"><label>Quantity *</label><input type="number" value={productForm.quantity} onChange={e => setProductForm({...productForm, quantity: e.target.value})} required /></div>
+                    <div className="form-group"><label>Low Stock Alert</label><input type="number" value={productForm.min_stock_level} onChange={e => setProductForm({...productForm, min_stock_level: e.target.value})} /></div>
                   </div>
                 </div>
-
-                <div className="form-group">
-                  <label>Tags (comma-separated)</label>
-                  <input type="text" value={productForm.tags} onChange={e => setProductForm({...productForm, tags: e.target.value})} placeholder="e.g. lipstick, makeup" />
-                </div>
-
+                <div className="form-group"><label>Tags (comma-separated)</label><input type="text" value={productForm.tags} onChange={e => setProductForm({...productForm, tags: e.target.value})} placeholder="e.g. lipstick, makeup" /></div>
                 <div className="form-actions">
                   {editingProduct && <button type="button" className="cancel-btn" onClick={resetProductForm}>Cancel</button>}
                   <button type="submit" className="submit-btn">{editingProduct ? 'Update' : 'Add Product'}</button>
@@ -898,29 +934,15 @@ function App() {
             </div>
 
             <div className="data-panel">
+              <SearchFilterBar search={adminProductSearch} setSearch={setAdminProductSearch} placeholder="Search products..." />
               <h2>Products ({products.length})</h2>
               <div className="data-table">
                 <table>
-                  <thead>
-                    <tr>
-                      <th>Product</th>
-                      <th>SKU</th>
-                      <th>Cost</th>
-                      <th>Price</th>
-                      <th>Stock</th>
-                      <th>Sold</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
+                  <thead><tr><th>Product</th><th>SKU</th><th>Cost</th><th>Price</th><th>Stock</th><th>Sold</th><th>Actions</th></tr></thead>
                   <tbody>
                     {products.map(p => (
                       <tr key={p.id} className={!p.is_active ? 'inactive' : ''}>
-                        <td>
-                          <div className="product-cell">
-                            <strong>{p.name}</strong>
-                            {p.brand && <span className="brand">{p.brand}</span>}
-                          </div>
-                        </td>
+                        <td><div className="product-cell"><strong>{p.name}</strong>{p.brand && <span className="brand">{p.brand}</span>}</div></td>
                         <td>{p.sku || '-'}</td>
                         <td>{p.cost_price ? `$${p.cost_price}` : '-'}</td>
                         <td className="price">${p.price}</td>
@@ -935,30 +957,33 @@ function App() {
                   </tbody>
                 </table>
               </div>
+              <LoadMoreButton hasMore={adminProductsHasMore} isLoading={isLoading} onClick={() => fetchAdminProducts(user.shop_id, adminProductsPage + 1)} />
             </div>
           </div>
         )}
 
-        {/* Orders Tab */}
         {activeTab === 'orders' && (
           <div className="orders-panel">
+            <SearchFilterBar
+              search={orderSearch}
+              setSearch={setOrderSearch}
+              placeholder="Search orders..."
+              filters={
+                <select value={orderStatusFilter} onChange={e => setOrderStatusFilter(e.target.value)} className="filter-select">
+                  <option value="">All Status</option>
+                  <option value="pending">Pending</option>
+                  <option value="confirmed">Confirmed</option>
+                  <option value="shipped">Shipped</option>
+                  <option value="delivered">Delivered</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              }
+            />
             <h2>Orders ({orders.length})</h2>
-            {orders.length === 0 ? (
-              <p className="empty">No orders yet</p>
-            ) : (
+            {orders.length === 0 ? <p className="empty">No orders found</p> : (
               <div className="data-table">
                 <table>
-                  <thead>
-                    <tr>
-                      <th>Order #</th>
-                      <th>Customer</th>
-                      <th>Product</th>
-                      <th>Qty</th>
-                      <th>Total</th>
-                      <th>Status</th>
-                      <th>Date</th>
-                    </tr>
-                  </thead>
+                  <thead><tr><th>Order #</th><th>Customer</th><th>Product</th><th>Qty</th><th>Total</th><th>Status</th><th>Date</th></tr></thead>
                   <tbody>
                     {orders.map(o => (
                       <tr key={o.id}>
@@ -975,48 +1000,30 @@ function App() {
                 </table>
               </div>
             )}
+            <LoadMoreButton hasMore={ordersHasMore} isLoading={isLoading} onClick={() => fetchAdminOrders(user.shop_id, ordersPage + 1)} />
           </div>
         )}
       </div>
     )
   }
 
-  // ============== CUSTOMER VIEW (MARKETPLACE) ==============
-  // Home - Show shop categories
+  // ============== CUSTOMER VIEW ==============
   if (!selectedShopCategory && !selectedShop) {
     return (
       <div className="marketplace">
         <header className="marketplace-header">
-          <div className="header-left">
-            <h1>KommandAI Marketplace</h1>
-            <p>Shop from your favorite stores</p>
-          </div>
-          <div className="header-right">
-            <span className="user-info">Hi, {user.name}</span>
-            <button className="logout-btn" onClick={logout}>Logout</button>
-          </div>
+          <div className="header-left"><h1>KommandAI Marketplace</h1><p>Shop from your favorite stores</p></div>
+          <div className="header-right"><span className="user-info">Hi, {user.name}</span><button className="logout-btn" onClick={logout}>Logout</button></div>
         </header>
-
-        {/* AI Command Panel */}
         <div className="command-panel customer-command">
           <form onSubmit={sendCommand} className="command-form">
             <div className="command-input-wrapper">
               <span className="command-icon">🔍</span>
-              <input
-                type="text"
-                value={command}
-                onChange={e => setCommand(e.target.value)}
-                placeholder="Search products, shops... (e.g., 'Find lipstick in beauty shops')"
-                disabled={isProcessing}
-                className="command-input"
-              />
-              <button type="submit" disabled={isProcessing || !command.trim()} className="command-btn">
-                {isProcessing ? '...' : 'Go'}
-              </button>
+              <input type="text" value={command} onChange={e => setCommand(e.target.value)} placeholder="Search products, shops..." disabled={isProcessing} className="command-input" />
+              <button type="submit" disabled={isProcessing || !command.trim()} className="command-btn">{isProcessing ? '...' : 'Go'}</button>
             </div>
           </form>
         </div>
-
         <div className="categories-grid">
           {shopCategories.map(cat => (
             <div key={cat.id} className="category-card" onClick={() => setSelectedShopCategory(cat.id)}>
@@ -1027,80 +1034,56 @@ function App() {
             </div>
           ))}
         </div>
-
-        {cart.length > 0 && (
-          <div className="floating-cart">
-            <span>{cart.reduce((sum, i) => sum + i.qty, 0)} items</span>
-            <span>${cartTotal.toFixed(2)}</span>
-          </div>
-        )}
+        {cart.length > 0 && <div className="floating-cart"><span>{cart.reduce((sum, i) => sum + i.qty, 0)} items</span><span>${cartTotal.toFixed(2)}</span></div>}
       </div>
     )
   }
 
-  // Show shops in selected category
   if (selectedShopCategory && !selectedShop) {
     const category = shopCategories.find(c => c.id === selectedShopCategory)
     return (
       <div className="marketplace">
         <header className="marketplace-header">
-          <button className="back-btn" onClick={() => setSelectedShopCategory(null)}>← Back</button>
+          <button className="back-btn" onClick={() => { setSelectedShopCategory(null); setShops([]) }}>← Back</button>
           <h1>{category?.icon} {category?.name}</h1>
-          <div className="header-right">
-            <span className="user-info">Hi, {user.name}</span>
-            <button className="logout-btn" onClick={logout}>Logout</button>
-          </div>
+          <div className="header-right"><span className="user-info">Hi, {user.name}</span><button className="logout-btn" onClick={logout}>Logout</button></div>
         </header>
-
+        <div className="search-bar">
+          <input type="text" placeholder="Search shops..." value={shopsSearch} onChange={e => setShopsSearch(e.target.value)} />
+        </div>
         <div className="shops-grid">
-          {shops.map(shop => (
+          {shops.filter(s => !shopsSearch || s.name.toLowerCase().includes(shopsSearch.toLowerCase())).map(shop => (
             <div key={shop.id} className="shop-card" onClick={() => setSelectedShop(shop.id)}>
               <div className="shop-logo">{shop.name[0]}</div>
               <div className="shop-info">
                 <h3>{shop.name}</h3>
                 <p>{shop.description}</p>
-                <div className="shop-meta">
-                  <span className="rating">★ {shop.rating.toFixed(1)}</span>
-                  <span className="city">{shop.city}</span>
-                </div>
+                <div className="shop-meta"><span className="rating">★ {shop.rating.toFixed(1)}</span><span className="city">{shop.city}</span></div>
               </div>
             </div>
           ))}
           {shops.length === 0 && <p className="empty">No shops in this category yet</p>}
         </div>
+        <LoadMoreButton hasMore={shopsHasMore} isLoading={isLoading} onClick={() => fetchShopsByCategory(selectedShopCategory, shopsPage + 1)} />
       </div>
     )
   }
 
-  // Show products in selected shop
   if (selectedShop) {
     const shop = shops.find(s => s.id === selectedShop)
     return (
       <div className="marketplace">
         <header className="shop-header">
-          <button className="back-btn" onClick={() => { setSelectedShop(null); setShopProducts([]) }}>← Back</button>
-          <div className="shop-title">
-            <h1>{shop?.name}</h1>
-            <span className="rating">★ {shop?.rating.toFixed(1)}</span>
-          </div>
-          <div className="header-right">
-            <span className="user-info">Hi, {user.name}</span>
-            <button className="logout-btn" onClick={logout}>Logout</button>
-          </div>
+          <button className="back-btn" onClick={() => { setSelectedShop(null); setShopProducts([]); setSearchQuery('') }}>← Back</button>
+          <div className="shop-title"><h1>{shop?.name}</h1><span className="rating">★ {shop?.rating.toFixed(1)}</span></div>
+          <div className="header-right"><span className="user-info">Hi, {user.name}</span><button className="logout-btn" onClick={logout}>Logout</button></div>
         </header>
-
         <div className="search-bar">
-          <input
-            type="text"
-            placeholder={`Search in ${shop?.name}...`}
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-          />
+          <input type="text" placeholder={`Search in ${shop?.name}...`} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
         </div>
-
         <div className="products-grid">
-          {filteredProducts.map(p => (
-            <div key={p.id} className="product-card">
+          {shopProducts.map((p, index) => (
+            <div key={p.id} className="product-card" ref={index === shopProducts.length - 1 ? lastItemRef : null}>
               <div className="product-image">
                 {p.image_url ? <img src={p.image_url} alt={p.name} /> : <div className="placeholder">{p.name[0]}</div>}
                 {p.compare_at_price && <span className="sale-badge">Sale</span>}
@@ -1112,21 +1095,15 @@ function App() {
                   <span className="current-price">${p.price}</span>
                   {p.compare_at_price && <span className="original-price">${p.compare_at_price}</span>}
                 </div>
-                <button
-                  className="add-to-cart"
-                  onClick={() => addToCart(p)}
-                  disabled={p.quantity === 0}
-                >
+                <button className="add-to-cart" onClick={() => addToCart(p)} disabled={p.quantity === 0}>
                   {p.quantity === 0 ? 'Out of Stock' : 'Add to Cart'}
                 </button>
               </div>
             </div>
           ))}
-          {filteredProducts.length === 0 && (
-            <p className="empty">No products found</p>
-          )}
+          {shopProducts.length === 0 && <p className="empty">No products found</p>}
         </div>
-
+        <LoadMoreButton hasMore={productsHasMore} isLoading={isLoading} onClick={() => fetchShopProducts(selectedShop, productsPage + 1)} />
         {cart.length > 0 && (
           <div className="cart-panel">
             <h3>Cart ({cart.reduce((sum, i) => sum + i.qty, 0)} items)</h3>
@@ -1139,10 +1116,7 @@ function App() {
                 </div>
               ))}
             </div>
-            <div className="cart-total">
-              <span>Total:</span>
-              <span>${cartTotal.toFixed(2)}</span>
-            </div>
+            <div className="cart-total"><span>Total:</span><span>${cartTotal.toFixed(2)}</span></div>
             <button className="checkout-btn">Checkout</button>
           </div>
         )}
