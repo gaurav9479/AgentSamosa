@@ -550,6 +550,314 @@ body {
 
 .empty { color: #64748b; text-align: center; padding: 40px; }
 
+/* ============== LOGIN PAGE STYLES ============== */
+
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
+}
+
+.login-container {
+  width: 400px;
+  padding: 40px;
+}
+
+.login-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.login-header h1 {
+  font-size: 2.5rem;
+  background: linear-gradient(90deg, #3b82f6, #8b5cf6, #ec4899);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 10px;
+}
+
+.login-header p { color: #94a3b8; font-size: 1rem; }
+
+.login-form {
+  background: #1e293b;
+  border-radius: 16px;
+  padding: 30px;
+  border: 1px solid #334155;
+}
+
+.login-form h2 {
+  color: #e2e8f0;
+  font-size: 1.3rem;
+  margin-bottom: 25px;
+  text-align: center;
+}
+
+.error-msg {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid #ef4444;
+  color: #ef4444;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  text-align: center;
+  font-size: 14px;
+}
+
+.login-btn {
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 10px;
+  transition: transform 0.2s;
+}
+
+.login-btn:hover { transform: translateY(-2px); }
+
+.switch-auth {
+  text-align: center;
+  margin-top: 20px;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.switch-auth button {
+  background: none;
+  border: none;
+  color: #3b82f6;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.switch-auth button:hover { text-decoration: underline; }
+
+.demo-accounts {
+  margin-top: 30px;
+  text-align: center;
+}
+
+.demo-accounts h3 {
+  color: #64748b;
+  font-size: 13px;
+  margin-bottom: 15px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.demo-list {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.demo-list button {
+  padding: 8px 16px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid #3b82f6;
+  border-radius: 8px;
+  color: #3b82f6;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.demo-list button:hover {
+  background: rgba(59, 130, 246, 0.2);
+}
+
+/* ============== SUPER ADMIN STYLES ============== */
+
+.super-admin-app { max-width: 1400px; margin: 0 auto; padding: 20px; }
+
+.super-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+  border-radius: 12px;
+  padding: 20px 25px;
+  margin-bottom: 20px;
+  border: 1px solid #4c1d95;
+}
+
+.super-header h1 {
+  font-size: 1.5rem;
+  background: linear-gradient(90deg, #8b5cf6, #ec4899);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.super-header p { color: #a5b4fc; font-size: 0.85rem; }
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.user-info {
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.logout-btn {
+  padding: 8px 16px;
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid #ef4444;
+  border-radius: 6px;
+  color: #ef4444;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.logout-btn:hover {
+  background: rgba(239, 68, 68, 0.3);
+}
+
+.platform-stats .stat-card.primary {
+  border-color: #8b5cf6;
+}
+
+.platform-stats .stat-card.primary .stat-value {
+  color: #8b5cf6;
+}
+
+/* Shop List in Super Admin */
+.shop-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.shop-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  background: #0f172a;
+  border-radius: 8px;
+  border-left: 3px solid #8b5cf6;
+}
+
+.shop-item .shop-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.shop-item .shop-info strong { color: #e2e8f0; }
+.shop-item .shop-info span { font-size: 13px; color: #64748b; }
+.shop-item .city { color: #94a3b8; }
+
+.shop-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.verify-btn {
+  padding: 8px 16px;
+  background: #22c55e;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.suspend-btn {
+  padding: 8px 16px;
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.activate-btn {
+  padding: 8px 16px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* Shop cell with verified badge */
+.shop-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.verified-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  background: #22c55e;
+  color: white;
+  border-radius: 50%;
+  font-size: 11px;
+}
+
+.data-table tr.suspended { opacity: 0.6; background: rgba(239, 68, 68, 0.05); }
+
+.status.active { background: #22c55e; color: white; }
+.status.suspended { background: #ef4444; color: white; }
+.status.inactive { background: #64748b; color: white; }
+
+/* Role badges */
+.role {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.role.super_admin { background: #8b5cf6; color: white; }
+.role.admin { background: #3b82f6; color: white; }
+.role.customer { background: #22c55e; color: white; }
+
+/* Categories Admin */
+.categories-admin {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 15px;
+}
+
+.category-admin-card {
+  display: flex;
+  gap: 15px;
+  padding: 20px;
+  background: #0f172a;
+  border-radius: 12px;
+  border: 1px solid #334155;
+}
+
+.cat-icon { font-size: 2.5rem; }
+.cat-info h3 { color: #e2e8f0; font-size: 1.1rem; margin-bottom: 5px; }
+.cat-info p { color: #64748b; font-size: 13px; margin-bottom: 8px; }
+.cat-info .shop-count { color: #3b82f6; font-size: 13px; font-weight: 500; }
+
+/* Customer Command Panel */
+.customer-command {
+  max-width: 800px;
+  margin: 0 auto 30px;
+}
+
 /* Responsive */
 @media (max-width: 1200px) {
   .stats-grid { grid-template-columns: repeat(3, 1fr); }

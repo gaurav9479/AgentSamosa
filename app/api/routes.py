@@ -22,9 +22,12 @@ from app.services.order_service import OrderService
 from app.services.customer_service import CustomerService
 from app.services.analytics_service import AnalyticsService
 from app.services.shop_service import ShopService, ShopCategoryService
+from app.services.user_service import UserService
+from app.schemas.user import UserCreate, UserUpdate, UserResponse, UserLogin, LoginResponse
 from app.models.action_log import ActionLog
 from app.models.customer import Customer
 from app.models.product import Category
+from app.models.user import UserRole
 
 router = APIRouter()
 
@@ -660,6 +663,150 @@ async def websocket_endpoint(websocket: WebSocket):
             await manager.send_personal_message({"type": "pong", "data": data}, websocket)
     except WebSocketDisconnect:
         manager.disconnect(websocket)
+
+
+# ============== AUTH ENDPOINTS ==============
+
+@router.post("/auth/login", response_model=LoginResponse)
+async def login(data: UserLogin, db: AsyncSession = Depends(get_db)):
+    """Authenticate user and return user data"""
+    service = UserService(db)
+    user = await service.authenticate(data.email, data.password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    return LoginResponse(user=user)
+
+
+@router.post("/auth/register", response_model=UserResponse)
+async def register(data: UserCreate, db: AsyncSession = Depends(get_db)):
+    """Register a new customer account"""
+    service = UserService(db)
+    existing = await service.get_by_email(data.email)
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    # Force customer role for public registration
+    data.role = UserRole.CUSTOMER.value
+    user = await service.create(data)
+    return user
+
+
+# ============== USER MANAGEMENT (Super Admin only) ==============
+
+@router.get("/users", response_model=List[UserResponse])
+async def list_users(
+    role: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: AsyncSession = Depends(get_db)
+):
+    """List all users (Super Admin only)"""
+    service = UserService(db)
+    return await service.get_all(role, skip, limit)
+
+
+@router.get("/users/{user_id}", response_model=UserResponse)
+async def get_user(user_id: int, db: AsyncSession = Depends(get_db)):
+    service = UserService(db)
+    user = await service.get_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+
+@router.post("/users", response_model=UserResponse)
+async def create_user(data: UserCreate, db: AsyncSession = Depends(get_db)):
+    """Create a new user (Super Admin only)"""
+    service = UserService(db)
+    existing = await service.get_by_email(data.email)
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    user = await service.create(data)
+    return user
+
+
+@router.put("/users/{user_id}", response_model=UserResponse)
+async def update_user(user_id: int, data: UserUpdate, db: AsyncSession = Depends(get_db)):
+    service = UserService(db)
+    user = await service.update(user_id, data)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+
+@router.delete("/users/{user_id}")
+async def delete_user(user_id: int, db: AsyncSession = Depends(get_db)):
+    service = UserService(db)
+    success = await service.delete(user_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"message": "User deleted"}
+
+
+# ============== PLATFORM STATS (Super Admin) ==============
+
+@router.get("/platform/stats")
+async def get_platform_stats(db: AsyncSession = Depends(get_db)):
+    """Get platform-wide statistics for super admin"""
+    service = UserService(db)
+    return await service.get_platform_stats()
+
+
+@router.get("/platform/shops")
+async def get_all_platform_shops(
+    is_verified: Optional[bool] = None,
+    is_active: Optional[bool] = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all shops with filters for super admin"""
+    service = ShopService(db)
+    shops = await service.get_all(skip, limit)
+    # Filter based on parameters
+    if is_verified is not None:
+        shops = [s for s in shops if s.is_verified == is_verified]
+    if is_active is not None:
+        shops = [s for s in shops if s.is_active == is_active]
+    return shops
+
+
+@router.patch("/platform/shops/{shop_id}/verify")
+async def verify_shop(shop_id: int, db: AsyncSession = Depends(get_db)):
+    """Verify a shop (Super Admin only)"""
+    service = ShopService(db)
+    shop = await service.get_by_id(shop_id)
+    if not shop:
+        raise HTTPException(status_code=404, detail="Shop not found")
+    shop.is_verified = True
+    await db.commit()
+    await db.refresh(shop)
+    return {"message": f"Shop '{shop.name}' has been verified", "shop_id": shop_id}
+
+
+@router.patch("/platform/shops/{shop_id}/suspend")
+async def suspend_shop(shop_id: int, db: AsyncSession = Depends(get_db)):
+    """Suspend a shop (Super Admin only)"""
+    service = ShopService(db)
+    shop = await service.get_by_id(shop_id)
+    if not shop:
+        raise HTTPException(status_code=404, detail="Shop not found")
+    shop.is_active = False
+    await db.commit()
+    await db.refresh(shop)
+    return {"message": f"Shop '{shop.name}' has been suspended", "shop_id": shop_id}
+
+
+@router.patch("/platform/shops/{shop_id}/activate")
+async def activate_shop(shop_id: int, db: AsyncSession = Depends(get_db)):
+    """Activate a suspended shop (Super Admin only)"""
+    service = ShopService(db)
+    shop = await service.get_by_id(shop_id)
+    if not shop:
+        raise HTTPException(status_code=404, detail="Shop not found")
+    shop.is_active = True
+    await db.commit()
+    await db.refresh(shop)
+    return {"message": f"Shop '{shop.name}' has been activated", "shop_id": shop_id}
 
 
 # ============== HEALTH CHECK ==============

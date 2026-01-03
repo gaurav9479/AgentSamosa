@@ -67,3 +67,4 @@ class Shop(Base):
     category = relationship("ShopCategory", back_populates="shops")
     products = relationship("Product", back_populates="shop")
     orders = relationship("Order", back_populates="shop")
+    owner = relationship("User", back_populates="shop", uselist=False)

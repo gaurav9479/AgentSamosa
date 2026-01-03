@@ -3,14 +3,18 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.core.database import init_db
+from app.core.database import init_db, async_session
 from app.api.routes import router
+from app.services.user_service import create_default_users
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     await init_db()
+    # Create default users
+    async with async_session() as session:
+        await create_default_users(session)
     yield
     # Shutdown
     pass
