@@ -64,6 +64,84 @@ header p { color: #94a3b8; font-size: 0.9rem; }
 
 .dot.connected, .connection-dot.connected { background: #22c55e; }
 
+/* AI Command Panel */
+.command-panel {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+  border: 1px solid #334155;
+}
+
+.command-panel.shop-command {
+  margin-bottom: 15px;
+}
+
+.command-form { display: flex; flex-direction: column; gap: 12px; }
+
+.command-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #0f172a;
+  border: 2px solid #334155;
+  border-radius: 10px;
+  padding: 8px 15px;
+  transition: border-color 0.2s;
+}
+
+.command-input-wrapper:focus-within { border-color: #3b82f6; }
+
+.command-icon { font-size: 1.5rem; }
+
+.command-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #e2e8f0;
+  font-size: 16px;
+  outline: none;
+}
+
+.command-input::placeholder { color: #64748b; }
+
+.command-btn {
+  padding: 10px 24px;
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s, opacity 0.2s;
+}
+
+.command-btn:hover:not(:disabled) { transform: translateY(-2px); }
+.command-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.command-examples {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.command-examples > span { color: #64748b; font-size: 13px; }
+
+.example-btn {
+  padding: 6px 12px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 20px;
+  color: #94a3b8;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.example-btn:hover { background: #334155; color: #e2e8f0; border-color: #3b82f6; }
+
 /* Stats Grid */
 .stats-grid {
   display: grid;

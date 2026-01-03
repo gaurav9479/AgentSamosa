@@ -36,6 +36,10 @@ function App() {
   // Cart state (for shop view)
   const [cart, setCart] = useState([])
 
+  // AI Command state
+  const [command, setCommand] = useState('')
+  const [isProcessing, setIsProcessing] = useState(false)
+
   // Analytics
   const [revenueData, setRevenueData] = useState([])
   const [orderStatusData, setOrderStatusData] = useState([])
@@ -228,6 +232,55 @@ function App() {
 
   const cartTotal = cart.reduce((sum, i) => sum + i.price * i.qty, 0)
 
+  // AI Command Examples
+  const EXAMPLE_COMMANDS = [
+    "Create a product called iPhone 15 with price 999",
+    "List all products",
+    "Update product iPhone to price 899",
+    "Create category Electronics",
+    "Create customer John with email john@email.com",
+    "List all customers",
+    "Create order for product iPhone quantity 2",
+    "Show low stock products"
+  ]
+
+  // Send AI command
+  const sendCommand = async (e) => {
+    e?.preventDefault()
+    if (!command.trim() || isProcessing) return
+
+    setIsProcessing(true)
+    addLog(`Processing: "${command}"`, 'info')
+
+    try {
+      const res = await fetch('/api/command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: command.trim() })
+      })
+      const data = await res.json()
+
+      if (res.ok) {
+        addLog(`✓ ${data.message || 'Command executed successfully'}`, 'success')
+        if (data.result) {
+          if (Array.isArray(data.result)) {
+            addLog(`Found ${data.result.length} items`, 'info')
+          } else if (typeof data.result === 'object') {
+            addLog(`Result: ${JSON.stringify(data.result).slice(0, 100)}...`, 'info')
+          }
+        }
+        fetchData()
+      } else {
+        addLog(`✗ ${data.detail || 'Command failed'}`, 'error')
+      }
+    } catch (err) {
+      addLog(`Error: ${err.message}`, 'error')
+    } finally {
+      setIsProcessing(false)
+      setCommand('')
+    }
+  }
+
   // Filtered products for shop view
   const filteredProducts = products.filter(p => {
     if (!p.is_active) return false
@@ -264,6 +317,34 @@ function App() {
             </div>
           </div>
         </header>
+
+        {/* AI Command Panel */}
+        <div className="command-panel">
+          <form onSubmit={sendCommand} className="command-form">
+            <div className="command-input-wrapper">
+              <span className="command-icon">🤖</span>
+              <input
+                type="text"
+                value={command}
+                onChange={e => setCommand(e.target.value)}
+                placeholder="Tell me what to do... (e.g., 'Create a product called iPhone with price 999')"
+                disabled={isProcessing}
+                className="command-input"
+              />
+              <button type="submit" disabled={isProcessing || !command.trim()} className="command-btn">
+                {isProcessing ? 'Processing...' : 'Execute'}
+              </button>
+            </div>
+            <div className="command-examples">
+              <span>Try:</span>
+              {EXAMPLE_COMMANDS.slice(0, 4).map((ex, i) => (
+                <button key={i} type="button" onClick={() => setCommand(ex)} className="example-btn">
+                  {ex}
+                </button>
+              ))}
+            </div>
+          </form>
+        </div>
 
         {/* Stats Dashboard */}
         <div className="stats-grid">
@@ -644,6 +725,26 @@ function App() {
           </div>
         </div>
       </header>
+
+      {/* AI Command Panel for Shop */}
+      <div className="command-panel shop-command">
+        <form onSubmit={sendCommand} className="command-form">
+          <div className="command-input-wrapper">
+            <span className="command-icon">🤖</span>
+            <input
+              type="text"
+              value={command}
+              onChange={e => setCommand(e.target.value)}
+              placeholder="Ask me anything... (e.g., 'Show me electronics', 'Find products under $50')"
+              disabled={isProcessing}
+              className="command-input"
+            />
+            <button type="submit" disabled={isProcessing || !command.trim()} className="command-btn">
+              {isProcessing ? '...' : 'Go'}
+            </button>
+          </div>
+        </form>
+      </div>
 
       {/* Search Bar */}
       <div className="shop-search">
