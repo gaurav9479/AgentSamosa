@@ -1,21 +1,25 @@
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional, Dict, Any, List
 
 from app.core.database import get_db
 from app.core.websocket import manager
 from app.schemas.command import CommandInput, CommandResponse, ParsedIntent, MultiStepPlan
-from app.schemas.product import ProductCreate, ProductUpdate, ProductResponse
+from app.schemas.product import (
+    ProductCreate, ProductUpdate, ProductResponse,
+    CategoryCreate, CategoryUpdate, CategoryResponse
+)
 from app.schemas.order import OrderCreate, OrderUpdate, OrderResponse
 from app.schemas.customer import CustomerCreate, CustomerUpdate, CustomerResponse
 from app.services.intent_parser import IntentParser
 from app.services.action_executor import ActionExecutor
-from app.services.product_service import ProductService
+from app.services.product_service import ProductService, CategoryService
 from app.services.order_service import OrderService
 from app.services.customer_service import CustomerService
 from app.services.analytics_service import AnalyticsService
 from app.models.action_log import ActionLog
-from app.models.customer import Customer  # Import to register model
+from app.models.customer import Customer
+from app.models.product import Category
 
 router = APIRouter()
 
@@ -30,79 +34,97 @@ async def execute_command(
     command: CommandInput,
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Main endpoint for natural language commands.
-    Parses intent using Gemini and executes the appropriate action.
-    """
+    """Main endpoint for natural language commands."""
     parser = IntentParser()
     executor = ActionExecutor(db)
-
-    # Merge user context with session context
     context = {**session_context, **(command.context or {})}
-
-    # Parse the intent
     intent = await parser.parse(command.text, context)
 
-    # Log the action
     log = ActionLog(
         user_input=command.text,
         parsed_intent=intent.model_dump() if isinstance(intent, ParsedIntent) else {"steps": [s.model_dump() for s in intent.steps]},
     )
     db.add(log)
 
-    # Execute based on intent type
     if isinstance(intent, MultiStepPlan):
         results = await executor.execute_plan(intent)
         log.action_taken = "multi_step_plan"
         log.status = "completed" if all(r.success for r in results) else "partial"
         log.result = [r.model_dump() for r in results]
         await db.commit()
-
-        # Broadcast all results
         for result in results:
-            await manager.broadcast_action(
-                result.action, result.success, result.data, result.message
-            )
-
-        # Return last result
-        return results[-1] if results else CommandResponse(
-            success=False, action="error", message="No actions executed"
-        )
+            await manager.broadcast_action(result.action, result.success, result.data, result.message)
+        return results[-1] if results else CommandResponse(success=False, action="error", message="No actions executed")
     else:
         result = await executor.execute(intent)
         log.action_taken = intent.action
         log.status = "completed" if result.success else "failed"
         log.result = result.model_dump()
         await db.commit()
-
-        # Update session context
-        if result.success and result.data:
-            if "id" in result.data:
-                session_context["last_entity_id"] = result.data["id"]
-                session_context["last_entity_type"] = intent.entity
-
-        # Broadcast result
-        await manager.broadcast_action(
-            result.action, result.success, result.data, result.message
-        )
-
+        if result.success and result.data and "id" in result.data:
+            session_context["last_entity_id"] = result.data["id"]
+            session_context["last_entity_type"] = intent.entity
+        await manager.broadcast_action(result.action, result.success, result.data, result.message)
         return result
 
 
 @router.post("/command/confirm/{confirmation_id}", response_model=CommandResponse)
-async def confirm_command(
-    confirmation_id: str,
-    db: AsyncSession = Depends(get_db)
-):
-    """Confirm a pending destructive action."""
+async def confirm_command(confirmation_id: str, db: AsyncSession = Depends(get_db)):
     executor = ActionExecutor(db)
     result = await executor.confirm_action(confirmation_id)
-
-    await manager.broadcast_action(
-        result.action, result.success, result.data, result.message
-    )
-
+    await manager.broadcast_action(result.action, result.success, result.data, result.message)
     return result
+
+
+# ============== CATEGORY ENDPOINTS ==============
+
+@router.get("/categories", response_model=List[CategoryResponse])
+async def list_categories(db: AsyncSession = Depends(get_db)):
+    service = CategoryService(db)
+    return await service.get_all()
+
+
+@router.get("/categories/with-counts")
+async def list_categories_with_counts(db: AsyncSession = Depends(get_db)):
+    service = CategoryService(db)
+    return await service.get_with_product_count()
+
+
+@router.get("/categories/{category_id}", response_model=CategoryResponse)
+async def get_category(category_id: int, db: AsyncSession = Depends(get_db)):
+    service = CategoryService(db)
+    category = await service.get_by_id(category_id)
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+    return category
+
+
+@router.post("/categories", response_model=CategoryResponse)
+async def create_category(data: CategoryCreate, db: AsyncSession = Depends(get_db)):
+    service = CategoryService(db)
+    category = await service.create(data)
+    await manager.broadcast_update("category", "created", {"id": category.id, "name": category.name})
+    return category
+
+
+@router.put("/categories/{category_id}", response_model=CategoryResponse)
+async def update_category(category_id: int, data: CategoryUpdate, db: AsyncSession = Depends(get_db)):
+    service = CategoryService(db)
+    category = await service.update(category_id, data)
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+    await manager.broadcast_update("category", "updated", {"id": category.id, "name": category.name})
+    return category
+
+
+@router.delete("/categories/{category_id}")
+async def delete_category(category_id: int, db: AsyncSession = Depends(get_db)):
+    service = CategoryService(db)
+    success = await service.delete(category_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Category not found")
+    await manager.broadcast_update("category", "deleted", {"id": category_id})
+    return {"message": "Category deleted"}
 
 
 # ============== PRODUCT ENDPOINTS ==============
@@ -111,30 +133,69 @@ async def confirm_command(
 async def list_products(
     skip: int = 0,
     limit: int = 100,
+    category_id: Optional[int] = None,
+    search: Optional[str] = None,
+    include_inactive: bool = False,
     db: AsyncSession = Depends(get_db)
 ):
     service = ProductService(db)
-    return await service.get_all(skip, limit)
+    return await service.get_all(skip, limit, category_id, search, not include_inactive, include_inactive)
+
+
+@router.get("/products/featured")
+async def get_featured_products(limit: int = 10, db: AsyncSession = Depends(get_db)):
+    service = ProductService(db)
+    return await service.get_featured(limit)
+
+
+@router.get("/products/low-stock")
+async def get_low_stock_products(db: AsyncSession = Depends(get_db)):
+    service = ProductService(db)
+    products = await service.get_low_stock()
+    return [
+        {
+            "id": p.id,
+            "name": p.name,
+            "sku": p.sku,
+            "quantity": p.quantity,
+            "min_stock_level": p.min_stock_level,
+            "category_id": p.category_id
+        }
+        for p in products
+    ]
+
+
+@router.get("/products/search/{query}")
+async def search_products(query: str, limit: int = 20, db: AsyncSession = Depends(get_db)):
+    service = ProductService(db)
+    return await service.search(query, limit)
+
+
+@router.get("/products/inventory-stats")
+async def get_inventory_stats(db: AsyncSession = Depends(get_db)):
+    service = ProductService(db)
+    return await service.get_inventory_stats()
 
 
 @router.get("/products/{product_id}", response_model=ProductResponse)
-async def get_product(
-    product_id: int,
-    db: AsyncSession = Depends(get_db)
-):
+async def get_product(product_id: int, db: AsyncSession = Depends(get_db)):
     service = ProductService(db)
     product = await service.get_by_id(product_id)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
+    # Increment view count
+    await service.increment_view(product_id)
     return product
 
 
 @router.post("/products", response_model=ProductResponse)
-async def create_product(
-    data: ProductCreate,
-    db: AsyncSession = Depends(get_db)
-):
+async def create_product(data: ProductCreate, db: AsyncSession = Depends(get_db)):
     service = ProductService(db)
+    # Check for duplicate SKU
+    if data.sku:
+        existing = await service.get_by_sku(data.sku)
+        if existing:
+            raise HTTPException(status_code=400, detail="Product with this SKU already exists")
     product = await service.create(data)
     await manager.broadcast_update("product", "created", {
         "id": product.id, "name": product.name, "price": product.price
@@ -143,11 +204,7 @@ async def create_product(
 
 
 @router.put("/products/{product_id}", response_model=ProductResponse)
-async def update_product(
-    product_id: int,
-    data: ProductUpdate,
-    db: AsyncSession = Depends(get_db)
-):
+async def update_product(product_id: int, data: ProductUpdate, db: AsyncSession = Depends(get_db)):
     service = ProductService(db)
     product = await service.update(product_id, data)
     if not product:
@@ -158,11 +215,36 @@ async def update_product(
     return product
 
 
-@router.delete("/products/{product_id}")
-async def delete_product(
+@router.patch("/products/{product_id}/stock")
+async def update_product_stock(
     product_id: int,
+    quantity: int,
+    adjustment_type: str = "set",
     db: AsyncSession = Depends(get_db)
 ):
+    """Update product stock. adjustment_type: 'set', 'add', 'subtract'"""
+    service = ProductService(db)
+    product = await service.get_by_id(product_id)
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    if adjustment_type == "set":
+        product.quantity = quantity
+    elif adjustment_type == "add":
+        product.quantity += quantity
+    elif adjustment_type == "subtract":
+        product.quantity = max(0, product.quantity - quantity)
+
+    await db.commit()
+    await db.refresh(product)
+    await manager.broadcast_update("product", "stock_updated", {
+        "id": product.id, "name": product.name, "quantity": product.quantity
+    })
+    return {"id": product.id, "quantity": product.quantity}
+
+
+@router.delete("/products/{product_id}")
+async def delete_product(product_id: int, db: AsyncSession = Depends(get_db)):
     service = ProductService(db)
     success = await service.delete(product_id)
     if not success:
@@ -185,10 +267,7 @@ async def list_orders(
 
 
 @router.get("/orders/{order_id}", response_model=OrderResponse)
-async def get_order(
-    order_id: int,
-    db: AsyncSession = Depends(get_db)
-):
+async def get_order(order_id: int, db: AsyncSession = Depends(get_db)):
     service = OrderService(db)
     order = await service.get_by_id(order_id)
     if not order:
@@ -197,14 +276,16 @@ async def get_order(
 
 
 @router.post("/orders", response_model=OrderResponse)
-async def create_order(
-    data: OrderCreate,
-    db: AsyncSession = Depends(get_db)
-):
+async def create_order(data: OrderCreate, db: AsyncSession = Depends(get_db)):
     service = OrderService(db)
     order = await service.create(data)
     if not order:
         raise HTTPException(status_code=400, detail="Failed to create order")
+
+    # Update product stock
+    product_service = ProductService(db)
+    await product_service.update_stock(data.product_id, -data.quantity, sold=True)
+
     await manager.broadcast_update("order", "created", {
         "id": order.id, "status": order.status, "total": order.total_amount
     })
@@ -212,11 +293,7 @@ async def create_order(
 
 
 @router.put("/orders/{order_id}", response_model=OrderResponse)
-async def update_order(
-    order_id: int,
-    data: OrderUpdate,
-    db: AsyncSession = Depends(get_db)
-):
+async def update_order(order_id: int, data: OrderUpdate, db: AsyncSession = Depends(get_db)):
     service = OrderService(db)
     order = await service.update(order_id, data)
     if not order:
@@ -228,37 +305,31 @@ async def update_order(
 
 
 @router.post("/orders/{order_id}/cancel", response_model=OrderResponse)
-async def cancel_order(
-    order_id: int,
-    db: AsyncSession = Depends(get_db)
-):
+async def cancel_order(order_id: int, db: AsyncSession = Depends(get_db)):
     service = OrderService(db)
     order = await service.cancel(order_id)
     if not order:
         raise HTTPException(status_code=400, detail="Cannot cancel order")
-    await manager.broadcast_update("order", "cancelled", {
-        "id": order.id, "status": order.status
-    })
+    await manager.broadcast_update("order", "cancelled", {"id": order.id, "status": order.status})
     return order
 
 
 # ============== CUSTOMER ENDPOINTS ==============
 
 @router.get("/customers", response_model=List[CustomerResponse])
-async def list_customers(
-    skip: int = 0,
-    limit: int = 100,
-    db: AsyncSession = Depends(get_db)
-):
+async def list_customers(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db)):
     service = CustomerService(db)
     return await service.get_all(skip, limit)
 
 
+@router.get("/customers/search/{query}")
+async def search_customers(query: str, db: AsyncSession = Depends(get_db)):
+    service = CustomerService(db)
+    return await service.search(query)
+
+
 @router.get("/customers/{customer_id}", response_model=CustomerResponse)
-async def get_customer(
-    customer_id: int,
-    db: AsyncSession = Depends(get_db)
-):
+async def get_customer(customer_id: int, db: AsyncSession = Depends(get_db)):
     service = CustomerService(db)
     customer = await service.get_by_id(customer_id)
     if not customer:
@@ -267,12 +338,8 @@ async def get_customer(
 
 
 @router.post("/customers", response_model=CustomerResponse)
-async def create_customer(
-    data: CustomerCreate,
-    db: AsyncSession = Depends(get_db)
-):
+async def create_customer(data: CustomerCreate, db: AsyncSession = Depends(get_db)):
     service = CustomerService(db)
-    # Check if email already exists
     existing = await service.get_by_email(data.email)
     if existing:
         raise HTTPException(status_code=400, detail="Customer with this email already exists")
@@ -284,11 +351,7 @@ async def create_customer(
 
 
 @router.put("/customers/{customer_id}", response_model=CustomerResponse)
-async def update_customer(
-    customer_id: int,
-    data: CustomerUpdate,
-    db: AsyncSession = Depends(get_db)
-):
+async def update_customer(customer_id: int, data: CustomerUpdate, db: AsyncSession = Depends(get_db)):
     service = CustomerService(db)
     customer = await service.update(customer_id, data)
     if not customer:
@@ -300,10 +363,7 @@ async def update_customer(
 
 
 @router.delete("/customers/{customer_id}")
-async def delete_customer(
-    customer_id: int,
-    db: AsyncSession = Depends(get_db)
-):
+async def delete_customer(customer_id: int, db: AsyncSession = Depends(get_db)):
     service = CustomerService(db)
     success = await service.delete(customer_id)
     if not success:
@@ -312,83 +372,111 @@ async def delete_customer(
     return {"message": "Customer deleted"}
 
 
-@router.get("/customers/search/{query}")
-async def search_customers(
-    query: str,
-    db: AsyncSession = Depends(get_db)
-):
-    service = CustomerService(db)
-    customers = await service.search(query)
-    return customers
-
-
 # ============== ANALYTICS ENDPOINTS ==============
 
 @router.get("/analytics/dashboard")
-async def get_dashboard_analytics(
-    db: AsyncSession = Depends(get_db)
-):
-    """Get main dashboard statistics"""
+async def get_dashboard_analytics(db: AsyncSession = Depends(get_db)):
     service = AnalyticsService(db)
     return await service.get_dashboard_stats()
 
 
 @router.get("/analytics/revenue")
-async def get_revenue_analytics(
-    days: int = 7,
-    db: AsyncSession = Depends(get_db)
-):
-    """Get daily revenue for the last N days"""
+async def get_revenue_analytics(days: int = 7, db: AsyncSession = Depends(get_db)):
     service = AnalyticsService(db)
     return await service.get_revenue_by_day(days)
 
 
 @router.get("/analytics/order-status")
-async def get_order_status_distribution(
-    db: AsyncSession = Depends(get_db)
-):
-    """Get order count by status"""
+async def get_order_status_distribution(db: AsyncSession = Depends(get_db)):
     service = AnalyticsService(db)
     return await service.get_order_status_distribution()
 
 
 @router.get("/analytics/top-products")
-async def get_top_products(
-    limit: int = 5,
-    db: AsyncSession = Depends(get_db)
-):
-    """Get top selling products"""
+async def get_top_products(limit: int = 5, db: AsyncSession = Depends(get_db)):
     service = AnalyticsService(db)
     return await service.get_top_products(limit)
 
 
 @router.get("/analytics/top-customers")
-async def get_top_customers(
-    limit: int = 5,
-    db: AsyncSession = Depends(get_db)
-):
-    """Get top customers by spending"""
+async def get_top_customers(limit: int = 5, db: AsyncSession = Depends(get_db)):
     service = AnalyticsService(db)
     return await service.get_top_customers(limit)
 
 
 @router.get("/analytics/recent-orders")
-async def get_recent_orders(
-    limit: int = 10,
-    db: AsyncSession = Depends(get_db)
-):
-    """Get recent orders"""
+async def get_recent_orders(limit: int = 10, db: AsyncSession = Depends(get_db)):
     service = AnalyticsService(db)
     return await service.get_recent_orders(limit)
 
 
 @router.get("/analytics/monthly-comparison")
-async def get_monthly_comparison(
-    db: AsyncSession = Depends(get_db)
-):
-    """Compare this month vs last month"""
+async def get_monthly_comparison(db: AsyncSession = Depends(get_db)):
     service = AnalyticsService(db)
     return await service.get_monthly_comparison()
+
+
+# ============== SHOP STOREFRONT ENDPOINTS ==============
+
+@router.get("/shop/products")
+async def shop_list_products(
+    category_id: Optional[int] = None,
+    search: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 20,
+    db: AsyncSession = Depends(get_db)
+):
+    """Public endpoint for customer-facing product listing"""
+    service = ProductService(db)
+    products = await service.get_all(skip, limit, category_id, search, active_only=True)
+    return [
+        {
+            "id": p.id,
+            "name": p.name,
+            "description": p.description,
+            "brand": p.brand,
+            "price": p.price,
+            "compare_at_price": p.compare_at_price,
+            "image_url": p.image_url,
+            "category_id": p.category_id,
+            "in_stock": p.quantity > 0,
+            "unit": p.unit
+        }
+        for p in products
+    ]
+
+
+@router.get("/shop/categories")
+async def shop_list_categories(db: AsyncSession = Depends(get_db)):
+    """Public endpoint for customer-facing category listing"""
+    service = CategoryService(db)
+    return await service.get_with_product_count()
+
+
+@router.get("/shop/product/{product_id}")
+async def shop_get_product(product_id: int, db: AsyncSession = Depends(get_db)):
+    """Public endpoint for customer-facing product details"""
+    service = ProductService(db)
+    product = await service.get_by_id(product_id)
+    if not product or not product.is_active:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    await service.increment_view(product_id)
+
+    return {
+        "id": product.id,
+        "name": product.name,
+        "description": product.description,
+        "brand": product.brand,
+        "price": product.price,
+        "compare_at_price": product.compare_at_price,
+        "image_url": product.image_url,
+        "images": product.images,
+        "category_id": product.category_id,
+        "in_stock": product.quantity > 0,
+        "unit": product.unit,
+        "tags": product.tags
+    }
 
 
 # ============== WEBSOCKET ENDPOINT ==============
@@ -399,7 +487,6 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         while True:
             data = await websocket.receive_text()
-            # Echo back for heartbeat/ping
             await manager.send_personal_message({"type": "pong", "data": data}, websocket)
     except WebSocketDisconnect:
         manager.disconnect(websocket)
@@ -409,4 +496,4 @@ async def websocket_endpoint(websocket: WebSocket):
 
 @router.get("/health")
 async def health_check():
-    return {"status": "healthy", "service": "AgentSamosa"}
+    return {"status": "healthy", "service": "KommandAI"}
