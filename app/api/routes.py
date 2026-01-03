@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 from app.core.database import get_db
 from app.core.websocket import manager
@@ -103,7 +103,7 @@ async def confirm_command(
 
 # ============== PRODUCT ENDPOINTS ==============
 
-@router.get("/products", response_model=list[ProductResponse])
+@router.get("/products", response_model=List[ProductResponse])
 async def list_products(
     skip: int = 0,
     limit: int = 100,
@@ -169,7 +169,7 @@ async def delete_product(
 
 # ============== ORDER ENDPOINTS ==============
 
-@router.get("/orders", response_model=list[OrderResponse])
+@router.get("/orders", response_model=List[OrderResponse])
 async def list_orders(
     status: Optional[str] = None,
     skip: int = 0,

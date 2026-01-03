@@ -17,7 +17,9 @@ class Order(Base):
     __tablename__ = "orders"
 
     id = Column(Integer, primary_key=True, index=True)
-    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=True)
+    product_name = Column(String(255), nullable=False)  # Snapshot of product name at order time
+    unit_price = Column(Float, nullable=False)  # Snapshot of price at order time
     quantity = Column(Integer, nullable=False)
     total_amount = Column(Float, nullable=False)
     status = Column(String(50), default=OrderStatus.PENDING.value)

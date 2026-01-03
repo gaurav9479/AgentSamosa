@@ -12,14 +12,14 @@ body {
 }
 
 .app {
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
   padding: 20px;
 }
 
 header {
   text-align: center;
-  margin-bottom: 30px;
+  margin-bottom: 20px;
   padding: 20px;
   background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
   border-radius: 12px;
@@ -38,6 +38,64 @@ header p {
   color: #94a3b8;
 }
 
+/* Stats Dashboard */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+  border: 1px solid #475569;
+}
+
+.stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #f97316;
+}
+
+.stat-label {
+  font-size: 0.9rem;
+  color: #94a3b8;
+  margin-top: 5px;
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.tab {
+  padding: 12px 24px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  color: #94a3b8;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tab:hover {
+  background: #334155;
+  color: #e2e8f0;
+}
+
+.tab.active {
+  background: linear-gradient(135deg, #f97316 0%, #eab308 100%);
+  color: white;
+  border-color: transparent;
+}
+
+/* Command Section */
 .command-section {
   background: #1e293b;
   border-radius: 12px;
@@ -94,6 +152,45 @@ header p {
   transform: none;
 }
 
+/* Examples Section */
+.examples-section {
+  background: #1e293b;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+  border: 1px solid #334155;
+}
+
+.examples-section h3 {
+  color: #94a3b8;
+  margin-bottom: 15px;
+  font-size: 0.95rem;
+}
+
+.examples-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.example-btn {
+  padding: 8px 16px;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #94a3b8;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.example-btn:hover {
+  background: #334155;
+  color: #f97316;
+  border-color: #f97316;
+}
+
+/* Main Content Grid */
 .main-content {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -198,7 +295,7 @@ header p {
   font-weight: 600;
 }
 
-.item-card .status {
+.status {
   display: inline-block;
   padding: 2px 8px;
   border-radius: 4px;
@@ -221,9 +318,11 @@ header p {
 .connection-status {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   font-size: 13px;
   color: #64748b;
+  margin-top: 10px;
 }
 
 .connection-dot {
@@ -237,6 +336,168 @@ header p {
   background: #22c55e;
 }
 
+/* Tab Content - Forms and Tables */
+.tab-content {
+  display: grid;
+  grid-template-columns: 350px 1fr;
+  gap: 20px;
+}
+
+.form-panel {
+  background: #1e293b;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #334155;
+  height: fit-content;
+}
+
+.form-panel h2 {
+  font-size: 1.1rem;
+  color: #e2e8f0;
+  margin-bottom: 20px;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 13px;
+  color: #94a3b8;
+  margin-bottom: 6px;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 10px 14px;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #e2e8f0;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  border-color: #f97316;
+}
+
+.form-group textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.submit-btn {
+  width: 100%;
+  padding: 12px;
+  background: linear-gradient(135deg, #f97316 0%, #eab308 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.submit-btn:hover {
+  transform: translateY(-2px);
+}
+
+.data-panel {
+  background: #1e293b;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #334155;
+}
+
+.data-panel h2 {
+  font-size: 1.1rem;
+  color: #e2e8f0;
+  margin-bottom: 20px;
+}
+
+.data-table {
+  overflow-x: auto;
+}
+
+.data-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-table th,
+.data-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #334155;
+}
+
+.data-table th {
+  color: #94a3b8;
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.data-table td {
+  color: #e2e8f0;
+  font-size: 14px;
+}
+
+.data-table tr:hover {
+  background: #0f172a;
+}
+
+.edit-btn {
+  padding: 6px 12px;
+  background: #f97316;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+  margin-right: 8px;
+}
+
+.edit-btn:hover {
+  background: #ea580c;
+}
+
+.delete-btn {
+  padding: 6px 12px;
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.delete-btn:hover {
+  background: #dc2626;
+}
+
+.order-note {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 15px;
+  font-style: italic;
+}
+
+/* Confirmation Modal */
 .confirmation-modal {
   position: fixed;
   top: 0;
@@ -291,4 +552,81 @@ header p {
 .cancel-btn {
   background: #475569;
   color: white;
+}
+
+.save-btn {
+  background: #22c55e;
+}
+
+.save-btn:hover {
+  background: #16a34a;
+}
+
+.edit-modal {
+  max-width: 500px;
+  text-align: left;
+}
+
+.edit-modal h3 {
+  color: #f97316;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.edit-modal .form-group {
+  margin-bottom: 16px;
+}
+
+.edit-modal .form-group label {
+  display: block;
+  font-size: 13px;
+  color: #94a3b8;
+  margin-bottom: 6px;
+}
+
+.edit-modal .form-group input,
+.edit-modal .form-group textarea {
+  width: 100%;
+  padding: 10px 14px;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #e2e8f0;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.edit-modal .form-group input:focus,
+.edit-modal .form-group textarea:focus {
+  border-color: #f97316;
+}
+
+.edit-modal .form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.edit-modal .modal-buttons {
+  margin-top: 20px;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .main-content {
+    grid-template-columns: 1fr;
+  }
+
+  .tab-content {
+    grid-template-columns: 1fr;
+  }
+
+  .command-input-wrapper {
+    flex-direction: column;
+  }
 }

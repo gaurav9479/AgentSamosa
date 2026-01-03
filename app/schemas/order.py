@@ -19,7 +19,9 @@ class OrderUpdate(BaseModel):
 
 class OrderResponse(BaseModel):
     id: int
-    product_id: int
+    product_id: Optional[int]
+    product_name: str  # Snapshot of product name at order time
+    unit_price: float  # Snapshot of price at order time
     quantity: int
     total_amount: float
     status: str

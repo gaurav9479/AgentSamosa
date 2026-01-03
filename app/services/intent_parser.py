@@ -1,6 +1,6 @@
 import json
 import google.generativeai as genai
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Union
 
 from app.core.config import settings
 from app.schemas.command import ParsedIntent, MultiStepPlan
@@ -9,7 +9,7 @@ from app.schemas.command import ParsedIntent, MultiStepPlan
 class IntentParser:
     def __init__(self):
         genai.configure(api_key=settings.GEMINI_API_KEY)
-        self.model = genai.GenerativeModel("gemini-1.5-flash")
+        self.model = genai.GenerativeModel("gemini-2.5-flash")
 
         self.system_prompt = """You are an intent parser for a command execution system.
 Your job is to parse natural language commands into structured JSON actions.
@@ -43,7 +43,7 @@ Output format for multi-step:
 
     async def parse(
         self, user_input: str, context: Optional[Dict[str, Any]] = None
-    ) -> ParsedIntent | MultiStepPlan:
+    ) -> Union[ParsedIntent, MultiStepPlan]:
         context_str = ""
         if context:
             context_str = f"\n\nContext from previous interactions:\n{json.dumps(context)}"

@@ -1,5 +1,5 @@
 import uuid
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.command import ParsedIntent, CommandResponse, MultiStepPlan
@@ -69,7 +69,7 @@ class ActionExecutor:
             )
         return await self.execute(intent, confirmed=True)
 
-    async def execute_plan(self, plan: MultiStepPlan) -> list[CommandResponse]:
+    async def execute_plan(self, plan: MultiStepPlan) -> List[CommandResponse]:
         results = []
         for step in plan.steps:
             result = await self.execute(step)
@@ -269,7 +269,15 @@ class ActionExecutor:
             success=True,
             action="list_orders",
             message=f"Found {len(orders)} orders",
-            data=[{"id": o.id, "status": o.status, "total": o.total_amount, "customer": o.customer_name} for o in orders],
+            data=[{
+                "id": o.id,
+                "status": o.status,
+                "total": o.total_amount,
+                "customer": o.customer_name,
+                "product_name": o.product_name,
+                "unit_price": o.unit_price,
+                "quantity": o.quantity
+            } for o in orders],
         )
 
     async def _get_order(self, params: Dict[str, Any]) -> CommandResponse:

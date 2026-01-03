@@ -21,10 +21,13 @@ class OrderService:
         if not product:
             return None
 
-        total_amount = product.price * data.quantity
+        unit_price = product.price
+        total_amount = unit_price * data.quantity
 
         order = Order(
             product_id=data.product_id,
+            product_name=product.name,  # Snapshot product name
+            unit_price=unit_price,  # Snapshot price at order time
             quantity=data.quantity,
             total_amount=total_amount,
             customer_name=data.customer_name,
