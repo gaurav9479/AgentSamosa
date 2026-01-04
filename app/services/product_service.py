@@ -1,6 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_, and_
 from typing import Optional, List, Dict, Any
+from datetime import datetime, timezone, timedelta
 
 from app.models.product import Product, Category
 from app.schemas.product import ProductCreate, ProductUpdate, CategoryCreate, CategoryUpdate
@@ -292,4 +293,153 @@ class ProductService:
             "out_of_stock": out_of_stock,
             "in_stock": total - low_stock - out_of_stock,
             "inventory_value": round(inventory_value, 2)
+        }
+
+    # ============== EXPIRY & CLEARANCE METHODS ==============
+
+    async def get_expiring_soon(self, days: int = 30, shop_id: Optional[int] = None) -> List[Product]:
+        """Get perishable products expiring within specified days"""
+        now = datetime.now(timezone.utc)
+        expiry_threshold = now + timedelta(days=days)
+
+        conditions = [
+            Product.is_active == True,
+            Product.is_perishable == True,
+            Product.expiry_date != None,
+            Product.expiry_date > now,  # Not already expired
+            Product.expiry_date <= expiry_threshold  # Within threshold
+        ]
+        if shop_id:
+            conditions.append(Product.shop_id == shop_id)
+
+        result = await self.db.execute(
+            select(Product)
+            .where(and_(*conditions))
+            .order_by(Product.expiry_date)
+        )
+        return list(result.scalars().all())
+
+    async def get_expired_products(self, shop_id: Optional[int] = None) -> List[Product]:
+        """Get products that have expired"""
+        now = datetime.now(timezone.utc)
+
+        conditions = [
+            Product.is_perishable == True,
+            Product.expiry_date != None,
+            Product.expiry_date <= now
+        ]
+        if shop_id:
+            conditions.append(Product.shop_id == shop_id)
+
+        result = await self.db.execute(
+            select(Product)
+            .where(and_(*conditions))
+            .order_by(Product.expiry_date)
+        )
+        return list(result.scalars().all())
+
+    async def get_clearance_products(self, shop_id: Optional[int] = None) -> List[Product]:
+        """Get products currently on clearance sale"""
+        conditions = [
+            Product.is_active == True,
+            Product.is_on_clearance == True
+        ]
+        if shop_id:
+            conditions.append(Product.shop_id == shop_id)
+
+        result = await self.db.execute(
+            select(Product)
+            .where(and_(*conditions))
+            .order_by(Product.expiry_date)
+        )
+        return list(result.scalars().all())
+
+    async def apply_clearance_sale(self, product_id: int, discount: Optional[float] = None) -> Optional[Product]:
+        """Apply clearance sale to a product"""
+        product = await self.get_by_id(product_id)
+        if not product:
+            return None
+
+        product.is_on_clearance = True
+        if discount is not None:
+            product.clearance_discount = discount
+
+        await self.db.commit()
+        await self.db.refresh(product)
+        return product
+
+    async def remove_from_clearance(self, product_id: int) -> Optional[Product]:
+        """Remove product from clearance sale"""
+        product = await self.get_by_id(product_id)
+        if not product:
+            return None
+
+        product.is_on_clearance = False
+        await self.db.commit()
+        await self.db.refresh(product)
+        return product
+
+    async def check_and_apply_clearance(self, shop_id: Optional[int] = None) -> List[Product]:
+        """
+        Batch job: Check all expiring products and auto-apply clearance.
+        Returns list of products that were put on clearance.
+        """
+        expiring_products = await self.get_expiring_soon(days=30, shop_id=shop_id)
+        newly_on_clearance = []
+
+        for product in expiring_products:
+            if not product.is_on_clearance:
+                product.is_on_clearance = True
+
+                # Increase discount if very close to expiry
+                if product.days_until_expiry is not None and product.days_until_expiry <= 7:
+                    product.clearance_discount = max(product.clearance_discount, 30.0)
+
+                newly_on_clearance.append(product)
+
+        if newly_on_clearance:
+            await self.db.commit()
+            for product in newly_on_clearance:
+                await self.db.refresh(product)
+
+        return newly_on_clearance
+
+    async def deactivate_expired_products(self, shop_id: Optional[int] = None) -> List[Product]:
+        """Deactivate products that have expired"""
+        expired_products = await self.get_expired_products(shop_id=shop_id)
+        deactivated = []
+
+        for product in expired_products:
+            if product.is_active:
+                product.is_active = False
+                deactivated.append(product)
+
+        if deactivated:
+            await self.db.commit()
+            for product in deactivated:
+                await self.db.refresh(product)
+
+        return deactivated
+
+    async def get_expiry_stats(self, shop_id: Optional[int] = None) -> Dict[str, Any]:
+        """Get expiry statistics for dashboard"""
+        expiring_soon = await self.get_expiring_soon(days=30, shop_id=shop_id)
+        expired = await self.get_expired_products(shop_id=shop_id)
+        on_clearance = await self.get_clearance_products(shop_id=shop_id)
+
+        # Calculate potential loss from expired products
+        expired_value = sum(p.price * p.quantity for p in expired)
+
+        # Calculate clearance discount value
+        clearance_discount_value = sum(
+            (p.price - p.clearance_price) * p.quantity
+            for p in on_clearance if p.clearance_price
+        )
+
+        return {
+            "expiring_soon_count": len(expiring_soon),
+            "expired_count": len(expired),
+            "on_clearance_count": len(on_clearance),
+            "expired_inventory_value": round(expired_value, 2),
+            "clearance_discount_total": round(clearance_discount_value, 2)
         }
