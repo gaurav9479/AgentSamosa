@@ -2,7 +2,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from typing import Optional, List
 import hashlib
-from datetime import datetime
+import secrets
+from datetime import datetime, timedelta, timezone
 
 from app.models.user import User, UserRole
 from app.models.shop import Shop
@@ -117,6 +118,54 @@ class UserService:
             return False
 
         user.password_hash = self._hash_password(new_password)
+        await self.db.commit()
+        return True
+
+    async def generate_reset_token(self, email: str) -> Optional[str]:
+        """Generate a password reset token for the user"""
+        user = await self.get_by_email(email)
+        if not user:
+            return None
+
+        # Generate a secure random token
+        token = secrets.token_urlsafe(32)
+
+        # Set token and expiration (1 hour from now)
+        user.reset_token = token
+        user.reset_token_expires = datetime.now(timezone.utc) + timedelta(hours=1)
+
+        await self.db.commit()
+        await self.db.refresh(user)
+
+        return token
+
+    async def verify_reset_token(self, token: str) -> Optional[User]:
+        """Verify a password reset token and return the user"""
+        result = await self.db.execute(
+            select(User).where(User.reset_token == token)
+        )
+        user = result.scalar_one_or_none()
+
+        if not user:
+            return None
+
+        # Check if token is expired
+        if user.reset_token_expires and user.reset_token_expires < datetime.now(timezone.utc):
+            return None
+
+        return user
+
+    async def reset_password(self, token: str, new_password: str) -> bool:
+        """Reset password using a valid token"""
+        user = await self.verify_reset_token(token)
+        if not user:
+            return False
+
+        # Update password and clear token
+        user.password_hash = self._hash_password(new_password)
+        user.reset_token = None
+        user.reset_token_expires = None
+
         await self.db.commit()
         return True
 

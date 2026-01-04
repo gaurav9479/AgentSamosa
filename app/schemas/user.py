@@ -50,3 +50,48 @@ class UserWithShop(UserResponse):
 class LoginResponse(BaseModel):
     user: UserResponse
     message: str = "Login successful"
+
+
+class ShopOwnerRegister(BaseModel):
+    """Registration for shop owners - creates user + shop"""
+    # User details
+    email: EmailStr
+    password: str
+    name: str
+    phone: Optional[str] = None
+    # Shop details
+    shop_name: str
+    shop_description: Optional[str] = None
+    shop_category_id: Optional[int] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    pincode: Optional[str] = None
+    gst_number: Optional[str] = None
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ForgotPasswordResponse(BaseModel):
+    message: str
+    reset_token: Optional[str] = None  # Only for demo - in production, send via email
+
+
+class VerifyResetTokenRequest(BaseModel):
+    token: str
+
+
+class VerifyResetTokenResponse(BaseModel):
+    valid: bool
+    email: Optional[str] = None
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+
+class ResetPasswordResponse(BaseModel):
+    success: bool
+    message: str
