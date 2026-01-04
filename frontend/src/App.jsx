@@ -114,7 +114,7 @@ function App() {
   // Form states
   const [productForm, setProductForm] = useState({
     name: '', description: '', brand: '', sku: '', barcode: '',
-    price: '', cost_price: '', compare_at_price: '',
+    price: '', cost_price: '', min_price: '', compare_at_price: '',
     quantity: '', min_stock_level: '5', category_id: '',
     tags: '', unit: 'piece', is_featured: false
   })
@@ -690,6 +690,7 @@ function App() {
         brand: productForm.brand || null,
         sku: productForm.sku || null,
         cost_price: productForm.cost_price ? parseFloat(productForm.cost_price) : null,
+        min_price: productForm.min_price ? parseFloat(productForm.min_price) : null,
         quantity: parseInt(productForm.quantity) || 0,
         min_stock_level: parseInt(productForm.min_stock_level) || 5,
         category_id: productForm.category_id ? parseInt(productForm.category_id) : null,
@@ -725,6 +726,7 @@ function App() {
         brand: productForm.brand || null,
         sku: productForm.sku || null,
         cost_price: productForm.cost_price ? parseFloat(productForm.cost_price) : null,
+        min_price: productForm.min_price ? parseFloat(productForm.min_price) : null,
         quantity: parseInt(productForm.quantity) || 0,
         min_stock_level: parseInt(productForm.min_stock_level) || 5,
         category_id: productForm.category_id ? parseInt(productForm.category_id) : null,
@@ -761,6 +763,7 @@ function App() {
       name: p.name, description: p.description || '', brand: p.brand || '',
       sku: p.sku || '', barcode: p.barcode || '',
       price: p.price.toString(), cost_price: p.cost_price?.toString() || '',
+      min_price: p.min_price?.toString() || '',
       compare_at_price: p.compare_at_price?.toString() || '',
       quantity: p.quantity.toString(), min_stock_level: p.min_stock_level.toString(),
       category_id: p.category_id?.toString() || '', tags: p.tags || '',
@@ -772,7 +775,7 @@ function App() {
   const resetProductForm = () => {
     setProductForm({
       name: '', description: '', brand: '', sku: '', barcode: '',
-      price: '', cost_price: '', compare_at_price: '',
+      price: '', cost_price: '', min_price: '', compare_at_price: '',
       quantity: '', min_stock_level: '5', category_id: '',
       tags: '', unit: 'piece', is_featured: false
     })
@@ -1498,10 +1501,16 @@ function App() {
                 <div className="form-section">
                   <h3>Pricing</h3>
                   <div className="form-row">
-                    <div className="form-group"><label>Selling Price *</label><input type="number" step="0.01" value={productForm.price} onChange={e => setProductForm({...productForm, price: e.target.value})} required /></div>
-                    <div className="form-group"><label>Cost Price</label><input type="number" step="0.01" value={productForm.cost_price} onChange={e => setProductForm({...productForm, cost_price: e.target.value})} /></div>
+                    <div className="form-group"><label>Cost Price</label><input type="number" step="0.01" value={productForm.cost_price} onChange={e => setProductForm({...productForm, cost_price: e.target.value})} placeholder="Your purchase cost" /></div>
+                    <div className="form-group"><label>MRP / Selling Price *</label><input type="number" step="0.01" value={productForm.price} onChange={e => setProductForm({...productForm, price: e.target.value})} required /></div>
+                    <div className="form-group"><label>Min Bargain Price</label><input type="number" step="0.01" value={productForm.min_price} onChange={e => setProductForm({...productForm, min_price: e.target.value})} placeholder="Lowest acceptable price" /></div>
                   </div>
-                  {productForm.cost_price && productForm.price && <div className="profit-margin">Profit Margin: {(((parseFloat(productForm.price) - parseFloat(productForm.cost_price)) / parseFloat(productForm.cost_price)) * 100).toFixed(1)}%</div>}
+                  {productForm.cost_price && productForm.price && (
+                    <div className="pricing-summary">
+                      <span className="profit-margin">Margin: {(((parseFloat(productForm.price) - parseFloat(productForm.cost_price)) / parseFloat(productForm.cost_price)) * 100).toFixed(1)}%</span>
+                      <span className="profit-amount">Profit: ₹{(parseFloat(productForm.price) - parseFloat(productForm.cost_price)).toFixed(2)}</span>
+                    </div>
+                  )}
                 </div>
                 <div className="form-section">
                   <h3>Inventory</h3>
@@ -1523,22 +1532,29 @@ function App() {
               <h2>Products ({products.length})</h2>
               <div className="data-table">
                 <table>
-                  <thead><tr><th>Product</th><th>SKU</th><th>Cost</th><th>Price</th><th>Stock</th><th>Sold</th><th>Actions</th></tr></thead>
+                  <thead><tr><th>Product</th><th>SKU</th><th>Cost</th><th>MRP</th><th>Min Price</th><th>Margin</th><th>Stock</th><th>Sold</th><th>Actions</th></tr></thead>
                   <tbody>
-                    {products.map(p => (
-                      <tr key={p.id} className={!p.is_active ? 'inactive' : ''}>
-                        <td><div className="product-cell"><strong>{p.name}</strong>{p.brand && <span className="brand">{p.brand}</span>}</div></td>
-                        <td>{p.sku || '-'}</td>
-                        <td>{p.cost_price ? `$${p.cost_price}` : '-'}</td>
-                        <td className="price">${p.price}</td>
-                        <td className={p.quantity <= p.min_stock_level ? 'low-stock' : ''}>{p.quantity}</td>
-                        <td>{p.sold_count}</td>
-                        <td>
-                          <button className="edit-btn" onClick={() => editProduct(p)}>Edit</button>
-                          <button className="delete-btn" onClick={() => deleteProduct(p.id)}>Delete</button>
-                        </td>
-                      </tr>
-                    ))}
+                    {products.map(p => {
+                      const margin = p.cost_price && p.price ? Math.round(((p.price - p.cost_price) / p.cost_price) * 100) : null
+                      return (
+                        <tr key={p.id} className={!p.is_active ? 'inactive' : ''}>
+                          <td><div className="product-cell"><strong>{p.name}</strong>{p.brand && <span className="brand">{p.brand}</span>}</div></td>
+                          <td>{p.sku || '-'}</td>
+                          <td className="cost">{p.cost_price ? `₹${p.cost_price}` : '-'}</td>
+                          <td className="price">₹{p.price}</td>
+                          <td>{p.min_price ? `₹${p.min_price}` : '-'}</td>
+                          <td className={`margin ${margin && margin > 20 ? 'good' : margin && margin > 0 ? 'ok' : 'low'}`}>
+                            {margin != null ? `${margin}%` : '-'}
+                          </td>
+                          <td className={p.quantity <= p.min_stock_level ? 'low-stock' : ''}>{p.quantity}</td>
+                          <td>{p.sold_count}</td>
+                          <td>
+                            <button className="edit-btn" onClick={() => editProduct(p)}>Edit</button>
+                            <button className="delete-btn" onClick={() => deleteProduct(p.id)}>Delete</button>
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -1568,7 +1584,7 @@ function App() {
             {orders.length === 0 ? <p className="empty">No orders found</p> : (
               <div className="data-table">
                 <table>
-                  <thead><tr><th>Order #</th><th>Customer</th><th>Product</th><th>Qty</th><th>Total</th><th>Status</th><th>Date</th></tr></thead>
+                  <thead><tr><th>Order #</th><th>Customer</th><th>Product</th><th>Qty</th><th>MRP</th><th>Sold At</th><th>Profit</th><th>Status</th><th>Date</th></tr></thead>
                   <tbody>
                     {orders.map(o => (
                       <tr key={o.id}>
@@ -1576,7 +1592,11 @@ function App() {
                         <td>{o.customer_name}</td>
                         <td>{o.product_name}</td>
                         <td>{o.quantity}</td>
-                        <td className="price">${o.total_amount}</td>
+                        <td className="price">₹{o.listed_price || o.unit_price}</td>
+                        <td className="price">₹{o.final_price || o.unit_price}</td>
+                        <td className={`profit ${(o.profit || 0) >= 0 ? 'positive' : 'negative'}`}>
+                          ₹{o.profit != null ? o.profit.toFixed(2) : '-'}
+                        </td>
                         <td><span className={`status ${o.status}`}>{o.status}</span></td>
                         <td>{new Date(o.created_at).toLocaleDateString()}</td>
                       </tr>
