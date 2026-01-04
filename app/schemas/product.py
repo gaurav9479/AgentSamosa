@@ -81,6 +81,12 @@ class ProductCreate(BaseModel):
     # Status
     is_featured: bool = False
 
+    # Expiry & Clearance (for perishable items)
+    is_perishable: bool = False
+    expiry_date: Optional[datetime] = None
+    expiry_alert_days: int = 30
+    clearance_discount: float = 20.0
+
 
 class ProductUpdate(BaseModel):
     name: Optional[str] = None
@@ -110,6 +116,13 @@ class ProductUpdate(BaseModel):
 
     is_active: Optional[bool] = None
     is_featured: Optional[bool] = None
+
+    # Expiry & Clearance
+    is_perishable: Optional[bool] = None
+    expiry_date: Optional[datetime] = None
+    expiry_alert_days: Optional[int] = None
+    clearance_discount: Optional[float] = None
+    is_on_clearance: Optional[bool] = None
 
 
 class ProductResponse(BaseModel):
@@ -144,6 +157,13 @@ class ProductResponse(BaseModel):
 
     is_active: bool
     is_featured: bool
+
+    # Expiry & Clearance
+    is_perishable: bool = False
+    expiry_date: Optional[datetime] = None
+    expiry_alert_days: int = 30
+    clearance_discount: float = 20.0
+    is_on_clearance: bool = False
 
     created_at: datetime
     updated_at: Optional[datetime]
@@ -184,10 +204,23 @@ class LowStockAlert(BaseModel):
     category: Optional[str] = None
 
 
+class ExpiryAlert(BaseModel):
+    """Alert for products expiring soon or expired"""
+    product_id: int
+    name: str
+    shop_id: int
+    shop_name: str
+    expiry_date: datetime
+    days_until_expiry: int
+    original_price: float
+    clearance_price: float
+    alert_type: str  # "expiring_soon" | "expired"
+
+
 # ============== PUBLIC VS ADMIN VIEWS ==============
 
 class ProductPublicView(BaseModel):
-    """Product view for customers - no cost/profit info"""
+    """Product view for customers - no cost/profit info, expiry date hidden"""
     id: int
     name: str
     description: Optional[str]
@@ -200,16 +233,25 @@ class ProductPublicView(BaseModel):
     is_active: bool
     stock_status: str = "in_stock"
 
+    # Clearance sale info (expiry date hidden from customers)
+    is_on_clearance: bool = False
+    clearance_price: Optional[float] = None  # Discounted price when on clearance
+
     class Config:
         from_attributes = True
 
 
 class ProductAdminView(ProductResponse):
-    """Product view for shop admin - includes cost/profit info"""
+    """Product view for shop admin - includes cost/profit info and expiry details"""
     min_price: Optional[float]
     profit_margin: Optional[float] = None
     potential_profit: Optional[float] = None  # price - cost_price
     stock_status: str = "in_stock"
+
+    # Expiry info for admin
+    days_until_expiry: Optional[int] = None
+    expiry_status: str = "not_perishable"  # fresh, expiring_soon, expired
+    clearance_price: Optional[float] = None
 
     class Config:
         from_attributes = True
