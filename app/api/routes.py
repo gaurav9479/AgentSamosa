@@ -23,13 +23,19 @@ from app.services.customer_service import CustomerService
 from app.services.analytics_service import AnalyticsService
 from app.services.shop_service import ShopService, ShopCategoryService
 from app.services.user_service import UserService
-from app.schemas.user import UserCreate, UserUpdate, UserResponse, UserLogin, LoginResponse
+from app.schemas.user import (
+    UserCreate, UserUpdate, UserResponse, UserLogin, LoginResponse, ShopOwnerRegister,
+    ForgotPasswordRequest, ForgotPasswordResponse, VerifyResetTokenRequest,
+    VerifyResetTokenResponse, ResetPasswordRequest, ResetPasswordResponse
+)
 from app.models.action_log import ActionLog
 from app.models.customer import Customer
 from app.models.product import Category
 from app.models.user import UserRole
+from app.services.command_suggestions import CommandSuggestionService
 
 router = APIRouter()
+command_suggestion_service = CommandSuggestionService()
 
 # Session context storage (in production, use Redis)
 session_context: Dict[str, Any] = {}
@@ -82,6 +88,42 @@ async def confirm_command(confirmation_id: str, db: AsyncSession = Depends(get_d
     result = await executor.confirm_action(confirmation_id)
     await manager.broadcast_action(result.action, result.success, result.data, result.message)
     return result
+
+
+# ============== COMMAND SUGGESTIONS ==============
+
+@router.get("/command/suggestions")
+async def get_command_suggestions(
+    query: str = "",
+    role: str = "customer",
+    limit: int = 5
+):
+    """Get command suggestions based on partial query and user role"""
+    suggestions = command_suggestion_service.get_suggestions(query, role, limit)
+    return {"suggestions": suggestions}
+
+
+@router.get("/command/all")
+async def get_all_commands(role: str = "customer"):
+    """Get all available commands grouped by category for a role"""
+    commands = command_suggestion_service.get_all_commands(role)
+    return {"commands": commands}
+
+
+@router.get("/command/quick-actions")
+async def get_quick_actions(role: str = "customer"):
+    """Get quick action buttons for a role"""
+    actions = command_suggestion_service.get_quick_actions(role)
+    return {"quick_actions": actions}
+
+
+@router.get("/command/help/{command}")
+async def get_command_help(command: str):
+    """Get detailed help for a specific command"""
+    help_info = command_suggestion_service.get_command_help(command)
+    if not help_info:
+        raise HTTPException(status_code=404, detail="Command not found")
+    return help_info
 
 
 # ============== CATEGORY ENDPOINTS ==============
@@ -688,6 +730,58 @@ async def register(data: UserCreate, db: AsyncSession = Depends(get_db)):
     data.role = UserRole.CUSTOMER.value
     user = await service.create(data)
     return user
+
+
+@router.post("/auth/forgot-password", response_model=ForgotPasswordResponse)
+async def forgot_password(data: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
+    """Request a password reset token"""
+    service = UserService(db)
+    token = await service.generate_reset_token(data.email)
+
+    if not token:
+        # Don't reveal if email exists or not for security
+        return ForgotPasswordResponse(
+            message="If an account with this email exists, a reset link has been sent.",
+            reset_token=None
+        )
+
+    # In production, send email with reset link
+    # For demo purposes, we return the token directly
+    return ForgotPasswordResponse(
+        message="Password reset link generated. In production, this would be sent via email.",
+        reset_token=token  # Remove this in production!
+    )
+
+
+@router.post("/auth/verify-reset-token", response_model=VerifyResetTokenResponse)
+async def verify_reset_token(data: VerifyResetTokenRequest, db: AsyncSession = Depends(get_db)):
+    """Verify if a reset token is valid"""
+    service = UserService(db)
+    user = await service.verify_reset_token(data.token)
+
+    if not user:
+        return VerifyResetTokenResponse(valid=False, email=None)
+
+    # Mask email for privacy
+    email = user.email
+    masked_email = email[0:2] + "***" + email[email.index("@"):]
+
+    return VerifyResetTokenResponse(valid=True, email=masked_email)
+
+
+@router.post("/auth/reset-password", response_model=ResetPasswordResponse)
+async def reset_password(data: ResetPasswordRequest, db: AsyncSession = Depends(get_db)):
+    """Reset password using a valid token"""
+    service = UserService(db)
+    success = await service.reset_password(data.token, data.new_password)
+
+    if not success:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    return ResetPasswordResponse(
+        success=True,
+        message="Password has been reset successfully. You can now login with your new password."
+    )
 
 
 # ============== USER MANAGEMENT (Super Admin only) ==============
