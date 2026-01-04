@@ -639,6 +639,210 @@ async def get_inventory_stats(db: AsyncSession = Depends(get_db)):
     return await service.get_inventory_stats()
 
 
+# ============== EXPIRY & CLEARANCE ENDPOINTS ==============
+
+@router.get("/products/expiring-soon")
+async def get_expiring_soon_products(
+    days: int = 30,
+    shop_id: Optional[int] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get products expiring within specified days (admin only)"""
+    service = ProductService(db)
+    products = await service.get_expiring_soon(days, shop_id)
+    return [
+        {
+            "id": p.id,
+            "name": p.name,
+            "shop_id": p.shop_id,
+            "price": p.price,
+            "quantity": p.quantity,
+            "expiry_date": p.expiry_date,
+            "days_until_expiry": p.days_until_expiry,
+            "is_on_clearance": p.is_on_clearance,
+            "clearance_discount": p.clearance_discount,
+            "clearance_price": p.clearance_price
+        }
+        for p in products
+    ]
+
+
+@router.get("/products/expired")
+async def get_expired_products(
+    shop_id: Optional[int] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get expired products (admin only)"""
+    service = ProductService(db)
+    products = await service.get_expired_products(shop_id)
+    return [
+        {
+            "id": p.id,
+            "name": p.name,
+            "shop_id": p.shop_id,
+            "price": p.price,
+            "quantity": p.quantity,
+            "expiry_date": p.expiry_date,
+            "days_until_expiry": p.days_until_expiry,
+            "is_active": p.is_active
+        }
+        for p in products
+    ]
+
+
+@router.get("/products/clearance")
+async def get_clearance_products(
+    shop_id: Optional[int] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get products on clearance sale (public endpoint)"""
+    service = ProductService(db)
+    products = await service.get_clearance_products(shop_id)
+    return [
+        {
+            "id": p.id,
+            "name": p.name,
+            "description": p.description,
+            "brand": p.brand,
+            "shop_id": p.shop_id,
+            "original_price": p.price,
+            "clearance_price": p.clearance_price,
+            "discount_percent": p.clearance_discount,
+            "quantity": p.quantity,
+            "image_url": p.image_url,
+            "in_stock": p.quantity > 0
+        }
+        for p in products
+    ]
+
+
+@router.get("/products/expiry-stats")
+async def get_expiry_stats(
+    shop_id: Optional[int] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get expiry statistics for dashboard"""
+    service = ProductService(db)
+    return await service.get_expiry_stats(shop_id)
+
+
+@router.post("/products/{product_id}/apply-clearance")
+async def apply_clearance_to_product(
+    product_id: int,
+    discount: Optional[float] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """Manually apply clearance sale to a product"""
+    service = ProductService(db)
+    product = await service.apply_clearance_sale(product_id, discount)
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    await manager.broadcast_update("product", "clearance_applied", {
+        "id": product.id,
+        "name": product.name,
+        "clearance_price": product.clearance_price
+    })
+    return {
+        "message": f"Clearance sale applied to {product.name}",
+        "original_price": product.price,
+        "clearance_price": product.clearance_price,
+        "discount": product.clearance_discount
+    }
+
+
+@router.post("/products/{product_id}/remove-clearance")
+async def remove_clearance_from_product(
+    product_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """Remove product from clearance sale"""
+    service = ProductService(db)
+    product = await service.remove_from_clearance(product_id)
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    return {"message": f"Clearance removed from {product.name}"}
+
+
+@router.post("/products/check-expiry")
+async def check_and_apply_expiry_clearance(
+    shop_id: Optional[int] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """Batch job: Check expiring products and auto-apply clearance"""
+    service = ProductService(db)
+    newly_on_clearance = await service.check_and_apply_clearance(shop_id)
+    deactivated = await service.deactivate_expired_products(shop_id)
+
+    for product in newly_on_clearance:
+        await manager.broadcast_update("product", "auto_clearance", {
+            "id": product.id,
+            "name": product.name,
+            "days_until_expiry": product.days_until_expiry
+        })
+
+    return {
+        "products_put_on_clearance": len(newly_on_clearance),
+        "products_deactivated": len(deactivated),
+        "clearance_products": [
+            {"id": p.id, "name": p.name, "days_left": p.days_until_expiry}
+            for p in newly_on_clearance
+        ],
+        "expired_products": [
+            {"id": p.id, "name": p.name}
+            for p in deactivated
+        ]
+    }
+
+
+@router.get("/shops/{shop_id}/expiring-soon")
+async def get_shop_expiring_products(
+    shop_id: int,
+    days: int = 30,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get expiring products for a specific shop"""
+    service = ProductService(db)
+    products = await service.get_expiring_soon(days, shop_id)
+    return [
+        {
+            "id": p.id,
+            "name": p.name,
+            "price": p.price,
+            "quantity": p.quantity,
+            "expiry_date": p.expiry_date,
+            "days_until_expiry": p.days_until_expiry,
+            "is_on_clearance": p.is_on_clearance,
+            "clearance_price": p.clearance_price,
+            "expiry_status": p.expiry_status
+        }
+        for p in products
+    ]
+
+
+@router.get("/shops/{shop_id}/clearance")
+async def get_shop_clearance_products(
+    shop_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get clearance products for a specific shop (public)"""
+    service = ProductService(db)
+    products = await service.get_clearance_products(shop_id)
+    return [
+        {
+            "id": p.id,
+            "name": p.name,
+            "description": p.description,
+            "original_price": p.price,
+            "clearance_price": p.clearance_price,
+            "discount_percent": p.clearance_discount,
+            "quantity": p.quantity,
+            "image_url": p.image_url,
+            "in_stock": p.quantity > 0
+        }
+        for p in products
+    ]
+
+
 @router.get("/products/{product_id}", response_model=ProductResponse)
 async def get_product(product_id: int, db: AsyncSession = Depends(get_db)):
     service = ProductService(db)
@@ -1154,4 +1358,4 @@ async def activate_shop(shop_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.get("/health")
 async def health_check():
-    return {"status": "healthy", "service": "AgentSamosa"}
+    return {"status": "healthy", "service": "KommandAI"}
