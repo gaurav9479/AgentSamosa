@@ -14,6 +14,7 @@ class ShopCategory(Base):
     description = Column(String(500), nullable=True)
     icon = Column(String(50), nullable=True)  # emoji or icon name
     image_url = Column(String(500), nullable=True)
+    is_perishable = Column(Boolean, default=False)  # True for grocery, cosmetics, food categories
     is_active = Column(Boolean, default=True)
     sort_order = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

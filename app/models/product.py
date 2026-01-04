@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, ForeignKey, Text
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
+from datetime import datetime, timezone
 
 from app.core.database import Base
 
@@ -68,6 +69,13 @@ class Product(Base):
     is_active = Column(Boolean, default=True)
     is_featured = Column(Boolean, default=False)
 
+    # Expiry & Clearance (for perishable items like groceries, cosmetics)
+    is_perishable = Column(Boolean, default=False)
+    expiry_date = Column(DateTime(timezone=True), nullable=True)
+    expiry_alert_days = Column(Integer, default=30)  # Days before expiry to trigger alert
+    clearance_discount = Column(Float, default=20.0)  # Discount percentage when on clearance
+    is_on_clearance = Column(Boolean, default=False)  # Auto-set when expiring soon
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -96,3 +104,47 @@ class Product(Base):
         elif self.quantity <= self.min_stock_level:
             return "low_stock"
         return "in_stock"
+
+    @property
+    def days_until_expiry(self):
+        """Calculate days until expiry date"""
+        if not self.expiry_date:
+            return None
+        now = datetime.now(timezone.utc)
+        expiry = self.expiry_date if self.expiry_date.tzinfo else self.expiry_date.replace(tzinfo=timezone.utc)
+        delta = expiry - now
+        return delta.days
+
+    @property
+    def is_expiring_soon(self):
+        """Check if product is expiring within alert days"""
+        if not self.is_perishable or not self.expiry_date:
+            return False
+        days = self.days_until_expiry
+        return days is not None and 0 < days <= self.expiry_alert_days
+
+    @property
+    def is_expired(self):
+        """Check if product has expired"""
+        if not self.expiry_date:
+            return False
+        days = self.days_until_expiry
+        return days is not None and days <= 0
+
+    @property
+    def clearance_price(self):
+        """Calculate clearance price with discount"""
+        if not self.is_on_clearance or not self.clearance_discount:
+            return None
+        return round(self.price * (1 - self.clearance_discount / 100), 2)
+
+    @property
+    def expiry_status(self):
+        """Get expiry status string"""
+        if not self.is_perishable or not self.expiry_date:
+            return "not_perishable"
+        if self.is_expired:
+            return "expired"
+        elif self.is_expiring_soon:
+            return "expiring_soon"
+        return "fresh"
