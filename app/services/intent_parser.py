@@ -1,9 +1,166 @@
 import json
+import re
 import google.generativeai as genai
 from typing import Dict, Any, Optional, List, Union
 
 from app.core.config import settings
 from app.schemas.command import ParsedIntent, MultiStepPlan
+
+
+class FallbackParser:
+    """Rule-based fallback parser for when AI API is unavailable (rate limits, errors)"""
+
+    # Hindi/Hinglish keyword mappings to actions
+    KEYWORD_PATTERNS = {
+        # Product commands
+        'list_products': [
+            r'(?:सभी|सारे|all)\s*(?:प्रोडक्ट|products?|प्रोडक्ट्स)',
+            r'(?:प्रोडक्ट|products?|प्रोडक्ट्स)\s*(?:दिखाओ|दिखा|dikhao|list|show|batao|बताओ)',
+            r'(?:show|list|दिखाओ|dikhao)\s*(?:all\s*)?(?:प्रोडक्ट|products?|प्रोडक्ट्स)',
+            r'products?\s*(?:list|show|दिखाओ)',
+        ],
+        'get_low_stock': [
+            r'(?:low|कम|kam)\s*(?:stock|स्टॉक)',
+            r'(?:stock|स्टॉक)\s*(?:कम|low|kam)',
+            r'(?:कम|low)\s*(?:stock|स्टॉक)\s*(?:दिखाओ|dikhao|show|batao)?',
+            r'low\s*stock\s*(?:products?|items?|प्रोडक्ट)?',
+        ],
+        'search_products': [
+            r'(?:search|खोजो|khojo|ढूंढो|dhundho|find)\s+(.+)',
+            r'(.+)\s*(?:खोजो|khojo|ढूंढो|dhundho|search)',
+        ],
+
+        # Order commands
+        'list_orders': [
+            r'(?:सभी|सारे|all)\s*(?:orders?|ऑर्डर|ऑर्डर्स)',
+            r'(?:orders?|ऑर्डर)\s*(?:दिखाओ|दिखा|dikhao|list|show|batao|बताओ)',
+            r'(?:show|list|दिखाओ|dikhao)\s*(?:all\s*)?(?:orders?|ऑर्डर)',
+            r'(?:pending|confirmed|shipped)\s*orders?',
+            r'(?:पेंडिंग|कन्फर्म|शिप)\s*(?:orders?|ऑर्डर)',
+        ],
+        'list_my_orders': [
+            r'(?:मेरे|mere|my)\s*(?:orders?|ऑर्डर)',
+            r'(?:my|मेरे)\s*(?:orders?|ऑर्डर)\s*(?:दिखाओ|dikhao|show)?',
+        ],
+
+        # Dashboard/Stats commands
+        'get_shop_dashboard': [
+            r'(?:dashboard|डैशबोर्ड)',
+            r'(?:shop|दुकान|store)\s*(?:stats?|statistics|स्टैट्स)',
+            r'(?:my|मेरी|मेरा)\s*(?:stats?|dashboard|डैशबोर्ड)',
+            r'(?:stats?|स्टैट्स)\s*(?:दिखाओ|dikhao|show)?',
+        ],
+        'get_platform_stats': [
+            r'(?:platform|प्लेटफॉर्म)\s*(?:stats?|statistics|स्टैट्स)',
+            r'(?:overall|total|कुल)\s*(?:stats?|statistics|स्टैट्स)',
+        ],
+        'get_daily_profit': [
+            r'(?:आज\s*का|aaj\s*ka|today\'?s?)\s*(?:profit|प्रॉफिट|मुनाफा)',
+            r'(?:daily|रोज़|रोज)\s*(?:profit|प्रॉफिट|मुनाफा)',
+            r'(?:profit|प्रॉफिट)\s*(?:आज|today|daily)',
+        ],
+        'get_profit_summary': [
+            r'(?:profit|प्रॉफिट|मुनाफा)\s*(?:summary|report|दिखाओ|dikhao|show|batao)?',
+            r'(?:show|दिखाओ|dikhao)\s*(?:profit|प्रॉफिट|मुनाफा)',
+            r'(?:मेरा|mera|my)\s*(?:profit|प्रॉफिट|मुनाफा)',
+        ],
+
+        # Shop commands (Super Admin)
+        'list_shops': [
+            r'(?:सभी|सारे|all)\s*(?:shops?|दुकान|दुकानें|stores?)',
+            r'(?:shops?|दुकान|दुकानें)\s*(?:दिखाओ|दिखा|dikhao|list|show|batao)',
+            r'(?:show|list|दिखाओ|dikhao)\s*(?:all\s*)?(?:shops?|दुकान)',
+        ],
+        'get_pending_shops': [
+            r'(?:pending|पेंडिंग)\s*(?:shops?|दुकान|दुकानें)',
+            r'(?:shops?|दुकान)\s*(?:pending|पेंडिंग|verification)',
+            r'(?:unverified|अनवेरिफाइड)\s*(?:shops?|दुकान)',
+        ],
+        'verify_shop': [
+            r'(?:verify|वेरिफाई|approve|अप्रूव)\s*(?:shop|दुकान)\s*(.+)?',
+            r'(?:shop|दुकान)\s*(.+)?\s*(?:verify|वेरिफाई|approve|अप्रूव)\s*(?:करो|karo)?',
+        ],
+
+        # Customer commands
+        'list_customers': [
+            r'(?:सभी|सारे|all)\s*(?:customers?|ग्राहक|कस्टमर)',
+            r'(?:customers?|ग्राहक|कस्टमर)\s*(?:दिखाओ|dikhao|list|show|batao)',
+            r'(?:show|list|दिखाओ|dikhao)\s*(?:all\s*)?(?:customers?|ग्राहक)',
+        ],
+
+        # User commands
+        'list_users': [
+            r'(?:सभी|सारे|all)\s*(?:users?|यूज़र)',
+            r'(?:users?|यूज़र)\s*(?:दिखाओ|dikhao|list|show)',
+        ],
+
+        # Category commands
+        'list_shop_categories': [
+            r'(?:categories|कैटेगरी|श्रेणी)\s*(?:दिखाओ|dikhao|list|show)?',
+            r'(?:shop|दुकान)\s*(?:categories|कैटेगरी)',
+        ],
+    }
+
+    # Entity mapping based on action
+    ACTION_ENTITY_MAP = {
+        'list_products': 'product',
+        'get_low_stock': 'product',
+        'search_products': 'product',
+        'list_orders': 'order',
+        'list_my_orders': 'order',
+        'get_shop_dashboard': 'shop',
+        'get_platform_stats': 'platform',
+        'get_daily_profit': 'shop',
+        'get_profit_summary': 'shop',
+        'list_shops': 'shop',
+        'get_pending_shops': 'shop',
+        'verify_shop': 'shop',
+        'list_customers': 'customer',
+        'list_users': 'user',
+        'list_shop_categories': 'category',
+    }
+
+    @classmethod
+    def parse(cls, user_input: str) -> Optional[ParsedIntent]:
+        """Try to parse user input using rule-based patterns"""
+        text = user_input.lower().strip()
+
+        for action, patterns in cls.KEYWORD_PATTERNS.items():
+            for pattern in patterns:
+                match = re.search(pattern, text, re.IGNORECASE | re.UNICODE)
+                if match:
+                    parameters = {}
+
+                    # Extract parameters from captured groups
+                    if match.groups():
+                        query = match.group(1)
+                        if query and query.strip():
+                            if action == 'search_products':
+                                parameters['query'] = query.strip()
+                            elif action == 'verify_shop':
+                                parameters['name'] = query.strip()
+
+                    # Extract status filters for orders
+                    if action == 'list_orders':
+                        if any(s in text for s in ['pending', 'पेंडिंग']):
+                            parameters['status'] = 'pending'
+                        elif any(s in text for s in ['confirmed', 'कन्फर्म']):
+                            parameters['status'] = 'confirmed'
+                        elif any(s in text for s in ['shipped', 'शिप']):
+                            parameters['status'] = 'shipped'
+                        elif any(s in text for s in ['delivered', 'डिलीवर']):
+                            parameters['status'] = 'delivered'
+
+                    entity = cls.ACTION_ENTITY_MAP.get(action)
+
+                    return ParsedIntent(
+                        action=action,
+                        entity=entity,
+                        parameters=parameters,
+                        requires_confirmation=False
+                    )
+
+        return None
 
 
 class IntentParser:
@@ -13,6 +170,13 @@ class IntentParser:
 
         self.system_prompt = """You are an intent parser for a command execution system.
 Your job is to parse natural language commands into structured JSON actions.
+You understand both English and Hindi (including Hinglish - mixed Hindi-English).
+
+IMPORTANT: You can understand commands in:
+- English: "add product iPhone price 50000"
+- Hindi (Devanagari): "प्रोडक्ट जोड़ो iPhone कीमत 50000"
+- Hinglish (Romanized Hindi): "product add karo iPhone price 50000"
+- Mixed: "show all pending orders yaar" or "sab orders dikhao"
 
 Available actions:
 
@@ -99,6 +263,32 @@ Rules:
 14. When user says "profit summary", "my profit", "show profit" -> use get_profit_summary
 15. For admin bill (with profit info), set bill_type: "admin". For customer bill, set bill_type: "customer"
 
+Hindi/Hinglish Command Patterns (treat same as English equivalents):
+- "प्रोडक्ट जोड़ो/बनाओ" or "product add karo/banao" -> create_product
+- "प्रोडक्ट दिखाओ/लिस्ट करो" or "products dikhao/list karo" -> list_products
+- "प्रोडक्ट अपडेट करो/बदलो" or "product update karo/badlo" -> update_product
+- "प्रोडक्ट हटाओ/डिलीट करो" or "product hatao/delete karo" -> delete_product
+- "स्टॉक बढ़ाओ/जोड़ो" or "stock badhao/add karo" -> restock_product
+- "कम स्टॉक दिखाओ" or "low stock dikhao/batao" -> get_low_stock
+- "ऑर्डर दिखाओ" or "orders dikhao/list karo" -> list_orders
+- "ऑर्डर कन्फर्म करो" or "order confirm karo" -> confirm_order
+- "ऑर्डर भेजो/शिप करो" or "order ship karo/bhejo" -> ship_order
+- "ऑर्डर डिलीवर करो" or "order deliver karo" -> deliver_order
+- "ऑर्डर कैंसल करो" or "order cancel karo" -> cancel_order
+- "दुकान जोड़ो/बनाओ" or "shop add karo/banao/register karo" -> prefill_shop_form
+- "दुकान वेरिफाई करो" or "shop verify karo/approve karo" -> verify_shop
+- "पेंडिंग दुकानें दिखाओ" or "pending shops dikhao" -> get_pending_shops
+- "मेरे ऑर्डर दिखाओ" or "mere orders dikhao" -> list_my_orders
+- "खरीदना है/ऑर्डर करना है" or "kharidna hai/order karna hai" -> place_order
+- "डैशबोर्ड दिखाओ" or "dashboard dikhao" -> get_shop_dashboard
+- "प्लेटफॉर्म स्टैट्स" or "platform stats dikhao" -> get_platform_stats
+- "इस दाम पर बेचो" or "is price pe becho/sell karo" -> sell_at_price
+- "बिल बनाओ" or "bill banao/generate karo" -> generate_bill
+- "आज का प्रॉफिट" or "aaj ka profit/daily profit" -> get_daily_profit
+- "प्रॉफिट दिखाओ" or "profit dikhao/batao" -> get_profit_summary
+- "ग्राहक दिखाओ" or "customers dikhao" -> list_customers
+- "सर्च करो" or "search karo/dhundho" -> search_products
+
 Output format for single action:
 {"action": "action_name", "entity": "product|order|shop|user|category", "parameters": {...}, "requires_confirmation": false}
 
@@ -141,16 +331,30 @@ JSON output:"""
             return ParsedIntent(**parsed)
 
         except json.JSONDecodeError as e:
+            # Try fallback parser for JSON decode errors
+            fallback_result = FallbackParser.parse(user_input)
+            if fallback_result:
+                return fallback_result
             return ParsedIntent(
                 action="error",
                 entity=None,
                 parameters={"error": f"Failed to parse intent: {str(e)}"},
             )
         except Exception as e:
+            # Try fallback parser when AI API fails (rate limits, errors)
+            error_str = str(e)
+            fallback_result = FallbackParser.parse(user_input)
+            if fallback_result:
+                # Add note that fallback was used
+                fallback_result.parameters = fallback_result.parameters or {}
+                fallback_result.parameters['_fallback'] = True
+                return fallback_result
+
+            # If fallback also fails, return error
             return ParsedIntent(
                 action="error",
                 entity=None,
-                parameters={"error": f"Intent parsing failed: {str(e)}"},
+                parameters={"error": f"Intent parsing failed: {error_str}"},
             )
 
     async def parse_with_retry(
