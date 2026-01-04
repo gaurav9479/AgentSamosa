@@ -297,8 +297,11 @@ function App() {
     name: '', description: '', brand: '', sku: '', barcode: '',
     price: '', cost_price: '', min_price: '', compare_at_price: '',
     quantity: '', min_stock_level: '5', category_id: '',
-    tags: '', unit: 'piece', is_featured: false
+    tags: '', unit: 'piece', is_featured: false,
+    is_perishable: false, expiry_date: '', clearance_discount: '20'
   })
+  const [expiringProducts, setExpiringProducts] = useState([])
+  const [clearanceProducts, setClearanceProducts] = useState([])
   const [editingProduct, setEditingProduct] = useState(null)
 
   const wsRef = useRef(null)
@@ -722,14 +725,18 @@ function App() {
 
   const fetchAdminDashboard = async (shopId) => {
     try {
-      const [dashRes, lowRes, catRes] = await Promise.all([
+      const [dashRes, lowRes, catRes, expiryRes, clearanceRes] = await Promise.all([
         fetch(`/api/shops/${shopId}/dashboard`),
         fetch(`/api/shops/${shopId}/low-stock`),
-        fetch('/api/categories')
+        fetch('/api/categories'),
+        fetch(`/api/shops/${shopId}/expiring-soon`),
+        fetch(`/api/shops/${shopId}/clearance`)
       ])
       if (dashRes.ok) setDashboardStats(await dashRes.json())
       if (lowRes.ok) setLowStockProducts(await lowRes.json())
       if (catRes.ok) setCategories(await catRes.json())
+      if (expiryRes.ok) setExpiringProducts(await expiryRes.json())
+      if (clearanceRes.ok) setClearanceProducts(await clearanceRes.json())
     } catch (err) { console.error('Error fetching dashboard:', err) }
   }
 
@@ -950,7 +957,10 @@ function App() {
         category_id: productForm.category_id ? parseInt(productForm.category_id) : null,
         tags: productForm.tags || null,
         unit: productForm.unit,
-        is_featured: productForm.is_featured
+        is_featured: productForm.is_featured,
+        is_perishable: productForm.is_perishable,
+        expiry_date: productForm.expiry_date ? new Date(productForm.expiry_date).toISOString() : null,
+        clearance_discount: parseFloat(productForm.clearance_discount) || 20
       }
       const res = await fetch('/api/products', {
         method: 'POST',
@@ -986,7 +996,10 @@ function App() {
         category_id: productForm.category_id ? parseInt(productForm.category_id) : null,
         tags: productForm.tags || null,
         unit: productForm.unit,
-        is_featured: productForm.is_featured
+        is_featured: productForm.is_featured,
+        is_perishable: productForm.is_perishable,
+        expiry_date: productForm.expiry_date ? new Date(productForm.expiry_date).toISOString() : null,
+        clearance_discount: parseFloat(productForm.clearance_discount) || 20
       }
       const res = await fetch(`/api/products/${editingProduct.id}`, {
         method: 'PUT',
@@ -1021,7 +1034,10 @@ function App() {
       compare_at_price: p.compare_at_price?.toString() || '',
       quantity: p.quantity.toString(), min_stock_level: p.min_stock_level.toString(),
       category_id: p.category_id?.toString() || '', tags: p.tags || '',
-      unit: p.unit, is_featured: p.is_featured
+      unit: p.unit, is_featured: p.is_featured,
+      is_perishable: p.is_perishable || false,
+      expiry_date: p.expiry_date ? p.expiry_date.split('T')[0] : '',
+      clearance_discount: p.clearance_discount?.toString() || '20'
     })
     setActiveTab('products')
   }
@@ -1031,7 +1047,8 @@ function App() {
       name: '', description: '', brand: '', sku: '', barcode: '',
       price: '', cost_price: '', min_price: '', compare_at_price: '',
       quantity: '', min_stock_level: '5', category_id: '',
-      tags: '', unit: 'piece', is_featured: false
+      tags: '', unit: 'piece', is_featured: false,
+      is_perishable: false, expiry_date: '', clearance_discount: '20'
     })
     setEditingProduct(null)
   }
@@ -1976,6 +1993,38 @@ function App() {
                 </div>
               )}
             </div>
+            <div className="panel expiry-panel">
+              <h2>Expiring Soon</h2>
+              {expiringProducts.length === 0 ? <p className="empty">No products expiring soon</p> : (
+                <div className="alert-list">
+                  {expiringProducts.map(p => (
+                    <div key={p.id} className={`alert-item expiry-item ${p.days_until_expiry <= 7 ? 'critical' : ''}`}>
+                      <span className="alert-name">{p.name}</span>
+                      <span className={`expiry-days ${p.days_until_expiry <= 7 ? 'urgent' : ''}`}>
+                        {p.days_until_expiry} days left
+                      </span>
+                      <span className="expiry-price">
+                        {p.is_on_clearance ? (
+                          <>
+                            <span className="original-price">₹{p.price}</span>
+                            <span className="clearance-price">₹{p.clearance_price}</span>
+                          </>
+                        ) : (
+                          <span>₹{p.price}</span>
+                        )}
+                      </span>
+                      {!p.is_on_clearance && (
+                        <button className="clearance-btn" onClick={async () => {
+                          await fetch(`/api/products/${p.id}/apply-clearance`, { method: 'POST' })
+                          fetchAdminDashboard(user.shop_id)
+                        }}>Put on Sale</button>
+                      )}
+                      {p.is_on_clearance && <span className="on-sale-badge">ON SALE</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
             <div className="panel logs-panel">
               <h2>Recent Activity</h2>
               <div className="log-list">
@@ -2020,6 +2069,30 @@ function App() {
                     <div className="form-group"><label>Quantity *</label><input type="number" value={productForm.quantity} onChange={e => setProductForm({...productForm, quantity: e.target.value})} required /></div>
                     <div className="form-group"><label>Low Stock Alert</label><input type="number" value={productForm.min_stock_level} onChange={e => setProductForm({...productForm, min_stock_level: e.target.value})} /></div>
                   </div>
+                </div>
+                <div className="form-section expiry-section">
+                  <h3>Expiry & Clearance</h3>
+                  <div className="form-row">
+                    <div className="form-group checkbox-group">
+                      <label>
+                        <input type="checkbox" checked={productForm.is_perishable} onChange={e => setProductForm({...productForm, is_perishable: e.target.checked})} />
+                        Perishable Item (has expiry date)
+                      </label>
+                    </div>
+                  </div>
+                  {productForm.is_perishable && (
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label>Expiry Date</label>
+                        <input type="date" value={productForm.expiry_date} onChange={e => setProductForm({...productForm, expiry_date: e.target.value})} min={new Date().toISOString().split('T')[0]} />
+                      </div>
+                      <div className="form-group">
+                        <label>Clearance Discount (%)</label>
+                        <input type="number" value={productForm.clearance_discount} onChange={e => setProductForm({...productForm, clearance_discount: e.target.value})} min="0" max="90" placeholder="20" />
+                        <small>Auto-applied when expiring soon</small>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="form-group"><label>Tags (comma-separated)</label><input type="text" value={productForm.tags} onChange={e => setProductForm({...productForm, tags: e.target.value})} placeholder="e.g. lipstick, makeup" /></div>
                 <div className="form-actions">
