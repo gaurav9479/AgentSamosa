@@ -1,4 +1,4 @@
-# AgentSamosa
+# KommandAI
 
 Agentic AI Command & Control System - A backend that takes natural language commands, parses intent using Google Gemini, and executes real database operations with real-time updates.
 
@@ -48,7 +48,7 @@ pip install -r requirements.txt
 ```bash
 cp .env.example .env
 # Edit .env with your values:
-# - DATABASE_URL=postgresql://user:pass@localhost:5432/AgentSamosa
+# - DATABASE_URL=postgresql://user:pass@localhost:5432/kommandai
 # - GEMINI_API_KEY=your_api_key
 ```
 
@@ -56,10 +56,10 @@ cp .env.example .env
 
 ```bash
 # Create database
-createdb AgentSamosa
+createdb kommandai
 
 # Or using psql
-psql -c "CREATE DATABASE AgentSamosa;"
+psql -c "CREATE DATABASE kommandai;"
 ```
 
 ### 4. Run the Server
@@ -140,7 +140,7 @@ POST /api/command/confirm/{confirmation_id}
 ## Project Structure
 
 ```
-AgentSamosa/
+KommandAI/
 ├── app/
 │   ├── api/
 │   │   └── routes.py       # All API endpoints
@@ -170,7 +170,7 @@ AgentSamosa/
 
 ## User Roles
 
-AgentSamosa supports three user roles with different capabilities:
+KommandAI supports three user roles with different capabilities:
 
 | Role | Description | Key Commands |
 |------|-------------|--------------|
@@ -184,9 +184,9 @@ After running `python seed_data.py`:
 
 | Role | Email | Password |
 |------|-------|----------|
-| Super Admin | `superadmin@AgentSamosa.com` | `qwert12345` |
-| Shop Admin | `admin@AgentSamosa.com` | `qwert12345` |
-| Customer | `customer@AgentSamosa.com` | `qwert12345` |
+| Super Admin | `superadmin@kommandai.com` | `qwert12345` |
+| Shop Admin | `admin@kommandai.com` | `qwert12345` |
+| Customer | `customer@kommandai.com` | `qwert12345` |
 
 ## Get Gemini API Key
 
