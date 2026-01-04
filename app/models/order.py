@@ -25,9 +25,19 @@ class Order(Base):
     # Product info
     product_id = Column(Integer, ForeignKey("products.id"), nullable=True)
     product_name = Column(String(255), nullable=False)  # Snapshot of product name at order time
-    unit_price = Column(Float, nullable=False)  # Snapshot of price at order time
     quantity = Column(Integer, nullable=False)
-    total_amount = Column(Float, nullable=False)
+
+    # Pricing breakdown (for bargaining system)
+    cost_price = Column(Float, nullable=True)  # Admin only: what shop paid
+    listed_price = Column(Float, nullable=False)  # MRP at order time
+    final_price = Column(Float, nullable=False)  # Actual selling price (after bargaining)
+    unit_price = Column(Float, nullable=False)  # Per unit final price
+    total_amount = Column(Float, nullable=False)  # final_price * quantity
+
+    # Profit tracking (admin only)
+    total_cost = Column(Float, nullable=True)  # cost_price * quantity
+    profit = Column(Float, nullable=True)  # total_amount - total_cost
+    discount_given = Column(Float, default=0)  # (listed_price - final_price) * quantity
 
     # Order status
     status = Column(String(50), default=OrderStatus.PENDING.value)

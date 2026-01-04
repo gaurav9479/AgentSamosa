@@ -35,8 +35,9 @@ class Product(Base):
     barcode = Column(String(50), nullable=True, index=True)
 
     # Pricing
-    cost_price = Column(Float, nullable=True)  # Purchase cost
-    price = Column(Float, nullable=False)  # Selling price
+    cost_price = Column(Float, nullable=True)  # Purchase cost (admin only)
+    price = Column(Float, nullable=False)  # MRP / Display price
+    min_price = Column(Float, nullable=True)  # Minimum acceptable price for bargaining
     compare_at_price = Column(Float, nullable=True)  # Original price for showing discounts
 
     # Inventory

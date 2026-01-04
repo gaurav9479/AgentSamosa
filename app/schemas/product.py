@@ -57,7 +57,8 @@ class ProductCreate(BaseModel):
     barcode: Optional[str] = None
 
     # Pricing
-    cost_price: Optional[float] = Field(default=None, ge=0)
+    cost_price: Optional[float] = Field(default=None, ge=0)  # Admin only
+    min_price: Optional[float] = Field(default=None, ge=0)  # Minimum bargain price
     compare_at_price: Optional[float] = Field(default=None, ge=0)
 
     # Inventory
@@ -90,6 +91,7 @@ class ProductUpdate(BaseModel):
     barcode: Optional[str] = None
 
     cost_price: Optional[float] = None
+    min_price: Optional[float] = None
     price: Optional[float] = None
     compare_at_price: Optional[float] = None
 
@@ -120,6 +122,7 @@ class ProductResponse(BaseModel):
     barcode: Optional[str]
 
     cost_price: Optional[float]
+    min_price: Optional[float]
     price: float
     compare_at_price: Optional[float]
 
@@ -179,3 +182,34 @@ class LowStockAlert(BaseModel):
     current_quantity: int
     min_stock_level: int
     category: Optional[str] = None
+
+
+# ============== PUBLIC VS ADMIN VIEWS ==============
+
+class ProductPublicView(BaseModel):
+    """Product view for customers - no cost/profit info"""
+    id: int
+    name: str
+    description: Optional[str]
+    brand: Optional[str]
+    price: float  # MRP
+    compare_at_price: Optional[float]
+    quantity: int
+    unit: str
+    image_url: Optional[str]
+    is_active: bool
+    stock_status: str = "in_stock"
+
+    class Config:
+        from_attributes = True
+
+
+class ProductAdminView(ProductResponse):
+    """Product view for shop admin - includes cost/profit info"""
+    min_price: Optional[float]
+    profit_margin: Optional[float] = None
+    potential_profit: Optional[float] = None  # price - cost_price
+    stock_status: str = "in_stock"
+
+    class Config:
+        from_attributes = True
