@@ -1,4 +1,4 @@
-# AgentSamosa
+# KommandAI
 
 Agentic AI Command & Control System - A backend that takes natural language commands, parses intent using Google Gemini, and executes real database operations with real-time updates.
 
@@ -11,11 +11,20 @@ User Command → Gemini (Intent Parser) → Action Executor → Database → Web
 ## Features
 
 - **Intent Recognition**: Natural language to structured actions via Gemini
-- **Database Mutations**: Full CRUD for Products and Orders
+- **Role-Based Commands**: Different commands for Super Admin, Shop Admin, and Customers
+- **Multi-Vendor Marketplace**: Manage multiple shops, products, and orders
+- **Smart Form Pre-fill**: Commands can pre-fill forms for user review
+- **Autocomplete Suggestions**: Get command suggestions as you type
+- **Quick Actions**: One-click buttons for common tasks
+- **Database Mutations**: Full CRUD for Products, Orders, Shops, and Users
 - **Context Awareness**: Session memory for contextual commands
 - **Real-time Updates**: WebSocket broadcasts for live UI updates
 - **Safety Rails**: Confirmation required for destructive operations
 - **Multi-step Execution**: Complex commands broken into action plans
+
+## Documentation
+
+- **[Command Guide](docs/COMMAND_GUIDE.md)** - Complete guide to all commands by role
 
 ## Tech Stack
 
@@ -39,7 +48,7 @@ pip install -r requirements.txt
 ```bash
 cp .env.example .env
 # Edit .env with your values:
-# - DATABASE_URL=postgresql://user:pass@localhost:5432/agentsamosa
+# - DATABASE_URL=postgresql://user:pass@localhost:5432/kommandai
 # - GEMINI_API_KEY=your_api_key
 ```
 
@@ -47,10 +56,10 @@ cp .env.example .env
 
 ```bash
 # Create database
-createdb agentsamosa
+createdb kommandai
 
 # Or using psql
-psql -c "CREATE DATABASE agentsamosa;"
+psql -c "CREATE DATABASE kommandai;"
 ```
 
 ### 4. Run the Server
@@ -131,7 +140,7 @@ POST /api/command/confirm/{confirmation_id}
 ## Project Structure
 
 ```
-AgentSamosa/
+KommandAI/
 ├── app/
 │   ├── api/
 │   │   └── routes.py       # All API endpoints
@@ -158,6 +167,26 @@ AgentSamosa/
 ├── run.py
 └── README.md
 ```
+
+## User Roles
+
+KommandAI supports three user roles with different capabilities:
+
+| Role | Description | Key Commands |
+|------|-------------|--------------|
+| **Super Admin** | Platform administrator | Manage shops, verify shops, manage users, view platform stats |
+| **Shop Admin** | Shop owner/manager | Manage products, process orders, view dashboard |
+| **Customer** | End user | Browse shops, place orders, track orders |
+
+### Demo Credentials
+
+After running `python seed_data.py`:
+
+| Role | Email | Password |
+|------|-------|----------|
+| Super Admin | `superadmin@kommandai.com` | `qwert12345` |
+| Shop Admin | `admin@kommandai.com` | `qwert12345` |
+| Customer | `customer@kommandai.com` | `qwert12345` |
 
 ## Get Gemini API Key
 
