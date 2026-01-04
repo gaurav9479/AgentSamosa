@@ -38,16 +38,16 @@ async def clear_data():
 async def seed_shop_categories():
     """Create shop categories (types of shops)"""
     categories = [
-        {"name": "Beauty & Cosmetics", "icon": "💄", "description": "Makeup, skincare, and beauty products"},
-        {"name": "Grocery", "icon": "🛒", "description": "Fresh produce, pantry staples, and household items"},
-        {"name": "Electronics", "icon": "📱", "description": "Phones, laptops, gadgets, and accessories"},
-        {"name": "Fashion", "icon": "👗", "description": "Clothing, shoes, and accessories"},
-        {"name": "Home & Living", "icon": "🏠", "description": "Furniture, decor, and home essentials"},
-        {"name": "Sports & Fitness", "icon": "⚽", "description": "Sports equipment and fitness gear"},
-        {"name": "Books & Stationery", "icon": "📚", "description": "Books, office supplies, and art materials"},
-        {"name": "Food & Beverages", "icon": "🍕", "description": "Restaurants, cafes, and food delivery"},
-        {"name": "Pharmacy", "icon": "💊", "description": "Medicines, health supplements, and wellness"},
-        {"name": "Jewelry", "icon": "💎", "description": "Gold, silver, and fashion jewelry"},
+        {"name": "Beauty & Cosmetics", "icon": "💄", "description": "Makeup, skincare, and beauty products", "is_perishable": True},
+        {"name": "Grocery", "icon": "🛒", "description": "Fresh produce, pantry staples, and household items", "is_perishable": True},
+        {"name": "Electronics", "icon": "📱", "description": "Phones, laptops, gadgets, and accessories", "is_perishable": False},
+        {"name": "Fashion", "icon": "👗", "description": "Clothing, shoes, and accessories", "is_perishable": False},
+        {"name": "Home & Living", "icon": "🏠", "description": "Furniture, decor, and home essentials", "is_perishable": False},
+        {"name": "Sports & Fitness", "icon": "⚽", "description": "Sports equipment and fitness gear", "is_perishable": False},
+        {"name": "Books & Stationery", "icon": "📚", "description": "Books, office supplies, and art materials", "is_perishable": False},
+        {"name": "Food & Beverages", "icon": "🍕", "description": "Restaurants, cafes, and food delivery", "is_perishable": True},
+        {"name": "Pharmacy", "icon": "💊", "description": "Medicines, health supplements, and wellness", "is_perishable": True},
+        {"name": "Jewelry", "icon": "💎", "description": "Gold, silver, and fashion jewelry", "is_perishable": False},
     ]
 
     async with async_session() as db:
@@ -56,6 +56,7 @@ async def seed_shop_categories():
                 name=cat["name"],
                 icon=cat["icon"],
                 description=cat["description"],
+                is_perishable=cat["is_perishable"],
                 sort_order=i,
                 is_active=True
             )
@@ -345,6 +346,33 @@ async def seed_products(shop_ids, category_ids):
                 continue
 
             for i, prod in enumerate(products):
+                # Determine if product is perishable based on category
+                perishable_categories = [
+                    "Lipstick", "Foundation", "Skincare", "Haircare", "Perfumes",  # Beauty
+                    "Fruits & Vegetables", "Dairy", "Snacks", "Beverages", "Staples"  # Grocery
+                ]
+                is_perishable = prod["category"] in perishable_categories
+
+                # Generate expiry date for perishable items
+                expiry_date = None
+                clearance_discount = 20.0
+                is_on_clearance = False
+
+                if is_perishable:
+                    # Random expiry between 5 days and 6 months from now
+                    days_until_expiry = random.choice([
+                        random.randint(5, 15),    # Some expiring very soon (for demo)
+                        random.randint(20, 45),   # Some expiring in a month
+                        random.randint(60, 180),  # Some with longer shelf life
+                    ])
+                    expiry_date = datetime.now() + timedelta(days=days_until_expiry)
+
+                    # Auto-apply clearance for items expiring within 30 days
+                    if days_until_expiry <= 30:
+                        is_on_clearance = True
+                        if days_until_expiry <= 7:
+                            clearance_discount = 30.0  # Higher discount for urgent items
+
                 product = Product(
                     name=prod["name"],
                     brand=prod["brand"],
@@ -362,6 +390,12 @@ async def seed_products(shop_ids, category_ids):
                     is_active=True,
                     is_featured=random.random() > 0.7,
                     unit="piece" if prod["category"] not in ["Fruits & Vegetables", "Dairy", "Staples"] else "kg",
+                    # Expiry fields
+                    is_perishable=is_perishable,
+                    expiry_date=expiry_date,
+                    expiry_alert_days=30,
+                    clearance_discount=clearance_discount,
+                    is_on_clearance=is_on_clearance,
                 )
                 db.add(product)
                 total_products += 1
