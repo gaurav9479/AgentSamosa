@@ -198,12 +198,12 @@ SHOP_ADMIN_COMMANDS: List[CommandTemplate] = [
     # Product Management
     CommandTemplate(
         command="create_product",
-        description="Create a new product",
-        template='create product "{name}" price {price} quantity {qty}',
+        description="Create a new product with cost and selling price",
+        template='create product "{name}" cost {cost} price {price} quantity {qty}',
         examples=[
-            'create product "iPhone 15" price 999.99 quantity 50',
-            'add product "Shampoo" at 29.99 with 100 in stock',
-            'new product "Blue T-Shirt" price 19.99 quantity 200',
+            'create product "iPhone 15" cost 700 price 999 quantity 50',
+            'add product "Shampoo" cost 70 price 150 min 90 quantity 100',
+            'new product "T-Shirt" cost 200 price 499 quantity 50',
         ],
         category="Products",
         roles=["admin"]
@@ -371,6 +371,68 @@ SHOP_ADMIN_COMMANDS: List[CommandTemplate] = [
             'find customer "jane@test.com"',
         ],
         category="Customers",
+        roles=["admin"]
+    ),
+
+    # Billing & Sales
+    CommandTemplate(
+        command="sell_at_price",
+        description="Sell product at bargained price",
+        template="sell product {id} at {price}",
+        examples=[
+            "sell product 5 at 100",
+            "sell product 12 at 80 to customer Ram",
+            "sold product 8 at 150 quantity 2",
+        ],
+        category="Billing",
+        roles=["admin"]
+    ),
+    CommandTemplate(
+        command="generate_bill",
+        description="Generate bill for an order",
+        template="generate bill for order {id}",
+        examples=[
+            "generate bill for order 123",
+            "print bill for order 456",
+            "make admin bill for order 789",
+        ],
+        category="Billing",
+        roles=["admin"]
+    ),
+    CommandTemplate(
+        command="get_daily_profit",
+        description="View daily profit report",
+        template="show today's profit",
+        examples=[
+            "show today's profit",
+            "daily profit report",
+            "profit for 2025-01-03",
+        ],
+        category="Billing",
+        roles=["admin"]
+    ),
+    CommandTemplate(
+        command="get_product_profit",
+        description="View profit by product",
+        template="show product profit",
+        examples=[
+            "show product profit",
+            "profit by product",
+            "which products are most profitable",
+        ],
+        category="Billing",
+        roles=["admin"]
+    ),
+    CommandTemplate(
+        command="get_profit_summary",
+        description="View overall profit summary",
+        template="show profit summary",
+        examples=[
+            "show profit summary",
+            "my profit",
+            "today's earnings",
+        ],
+        category="Billing",
         roles=["admin"]
     ),
 ]

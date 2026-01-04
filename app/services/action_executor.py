@@ -14,6 +14,7 @@ from app.services.customer_service import CustomerService
 from app.services.shop_service import ShopService, ShopCategoryService
 from app.services.user_service import UserService
 from app.services.analytics_service import AnalyticsService
+from app.services.billing_service import BillingService
 
 
 class ActionExecutor:
@@ -27,6 +28,7 @@ class ActionExecutor:
         self.user_service = UserService(db)
         self.category_service = CategoryService(db)
         self.analytics_service = AnalyticsService(db)
+        self.billing_service = BillingService(db)
         self.pending_confirmations: Dict[str, ParsedIntent] = {}
 
     async def execute(
@@ -108,6 +110,12 @@ class ActionExecutor:
             "create_product_category": self._create_product_category,
             # Analytics actions
             "get_analytics": self._get_analytics,
+            # Billing actions (Shop Admin)
+            "sell_at_price": self._sell_at_price,
+            "generate_bill": self._generate_bill,
+            "get_daily_profit": self._get_daily_profit,
+            "get_product_profit": self._get_product_profit,
+            "get_profit_summary": self._get_profit_summary,
             # Error handling
             "error": self._handle_error,
         }
@@ -1477,4 +1485,198 @@ class ActionExecutor:
             action="get_analytics",
             message=f"Retrieved {analytics_type} analytics",
             data=data,
+        )
+
+    # Billing handlers (Shop Admin)
+    async def _sell_at_price(self, params: Dict[str, Any]) -> CommandResponse:
+        """Sell a product at a bargained price"""
+        product_id = params.get("product_id")
+        selling_price = params.get("price") or params.get("selling_price")
+        quantity = params.get("quantity", 1)
+        customer_name = params.get("customer_name", "Walk-in Customer")
+        customer_phone = params.get("customer_phone")
+        force = params.get("force", False)
+
+        if not product_id:
+            return CommandResponse(
+                success=False,
+                action="sell_at_price",
+                message="Product ID is required",
+            )
+        if not selling_price:
+            return CommandResponse(
+                success=False,
+                action="sell_at_price",
+                message="Selling price is required",
+            )
+
+        result = self.billing_service.sell_at_price(
+            product_id=product_id,
+            selling_price=selling_price,
+            quantity=quantity,
+            customer_name=customer_name,
+            customer_phone=customer_phone,
+            force=force,
+        )
+
+        if not result["success"]:
+            return CommandResponse(
+                success=False,
+                action="sell_at_price",
+                message=result.get("error", "Failed to process sale"),
+                requires_confirmation=result.get("requires_confirmation", False),
+                data=result,
+            )
+
+        order = result["order"]
+        profit_info = result["profit_info"]
+
+        return CommandResponse(
+            success=True,
+            action="sell_at_price",
+            message=f"Sale completed! Order #{order.id} - Sold at ₹{selling_price} (Profit: ₹{profit_info['profit']})",
+            data={
+                "order_id": order.id,
+                "product": order.product_name,
+                "quantity": quantity,
+                "cost_price": profit_info["cost_price"],
+                "listed_price": profit_info["listed_price"],
+                "sold_at": profit_info["sold_at"],
+                "profit": profit_info["profit"],
+                "discount_given": profit_info["discount_given"],
+            },
+        )
+
+    async def _generate_bill(self, params: Dict[str, Any]) -> CommandResponse:
+        """Generate bill for an order - customer or admin view"""
+        order_id = params.get("order_id")
+        bill_type = params.get("bill_type", "customer")  # customer or admin
+
+        if not order_id:
+            return CommandResponse(
+                success=False,
+                action="generate_bill",
+                message="Order ID is required",
+            )
+
+        if bill_type == "admin":
+            result = self.billing_service.generate_admin_bill(order_id)
+        else:
+            result = self.billing_service.generate_customer_bill(order_id)
+
+        if not result["success"]:
+            return CommandResponse(
+                success=False,
+                action="generate_bill",
+                message=result.get("error", "Failed to generate bill"),
+            )
+
+        bill = result["bill"]
+        return CommandResponse(
+            success=True,
+            action="generate_bill",
+            message=f"Generated {bill_type} bill for Order #{order_id}",
+            data=bill,
+        )
+
+    async def _get_daily_profit(self, params: Dict[str, Any]) -> CommandResponse:
+        """Get daily profit report for a shop"""
+        shop_id = params.get("shop_id")
+        date_str = params.get("date")  # Optional: YYYY-MM-DD format
+
+        if not shop_id:
+            return CommandResponse(
+                success=False,
+                action="get_daily_profit",
+                message="Shop ID is required",
+            )
+
+        from datetime import datetime
+        report_date = None
+        if date_str:
+            try:
+                report_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+            except ValueError:
+                return CommandResponse(
+                    success=False,
+                    action="get_daily_profit",
+                    message="Invalid date format. Use YYYY-MM-DD",
+                )
+
+        result = self.billing_service.get_daily_profit_report(shop_id, report_date)
+
+        if not result["success"]:
+            return CommandResponse(
+                success=False,
+                action="get_daily_profit",
+                message=result.get("error", "Failed to get profit report"),
+            )
+
+        report = result["report"]
+        return CommandResponse(
+            success=True,
+            action="get_daily_profit",
+            message=f"Profit Report for {report['date']}: Revenue ₹{report['total_revenue']}, Profit ₹{report['total_profit']} ({report['avg_profit_margin']}% margin)",
+            data=report,
+        )
+
+    async def _get_product_profit(self, params: Dict[str, Any]) -> CommandResponse:
+        """Get profit report per product for a shop"""
+        shop_id = params.get("shop_id")
+
+        if not shop_id:
+            return CommandResponse(
+                success=False,
+                action="get_product_profit",
+                message="Shop ID is required",
+            )
+
+        result = self.billing_service.get_product_profit_report(shop_id)
+
+        if not result["success"]:
+            return CommandResponse(
+                success=False,
+                action="get_product_profit",
+                message=result.get("error", "Failed to get product profit report"),
+            )
+
+        products = result["products"]
+        total_profit = sum(p["total_profit"] for p in products)
+
+        return CommandResponse(
+            success=True,
+            action="get_product_profit",
+            message=f"Product Profit Report: {len(products)} products, Total Profit ₹{total_profit}",
+            data={"products": products, "total_profit": total_profit},
+        )
+
+    async def _get_profit_summary(self, params: Dict[str, Any]) -> CommandResponse:
+        """Get overall profit summary for shop dashboard"""
+        shop_id = params.get("shop_id")
+
+        if not shop_id:
+            return CommandResponse(
+                success=False,
+                action="get_profit_summary",
+                message="Shop ID is required",
+            )
+
+        result = self.billing_service.get_shop_profit_summary(shop_id)
+
+        if not result["success"]:
+            return CommandResponse(
+                success=False,
+                action="get_profit_summary",
+                message=result.get("error", "Failed to get profit summary"),
+            )
+
+        summary = result["summary"]
+        today = summary["today"]
+        all_time = summary["all_time"]
+
+        return CommandResponse(
+            success=True,
+            action="get_profit_summary",
+            message=f"Today: ₹{today['profit']} profit ({today['orders']} orders) | All Time: ₹{all_time['profit']} profit",
+            data=summary,
         )

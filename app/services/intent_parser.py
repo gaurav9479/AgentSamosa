@@ -75,6 +75,13 @@ Available actions:
 - list_shop_categories: List shop categories (params: none)
 - create_shop_category: Create shop category (params: name, description?, icon?)
 
+=== BILLING & PROFIT COMMANDS (Shop Admin) ===
+- sell_at_price: Sell product at bargained price (params: product_id, price/selling_price, quantity?, customer_name?, customer_phone?)
+- generate_bill: Generate bill for order (params: order_id, bill_type: "customer"|"admin")
+- get_daily_profit: Get daily profit report (params: shop_id, date?)
+- get_product_profit: Get profit report by product (params: shop_id)
+- get_profit_summary: Get overall profit summary (params: shop_id)
+
 Rules:
 1. Output ONLY valid JSON, no markdown or explanation
 2. For destructive actions (delete, cancel, suspend), set requires_confirmation: true
@@ -85,6 +92,12 @@ Rules:
 7. When user says "buy", "order", "purchase" a product -> use place_order
 8. When user says "show dashboard", "my stats" -> use get_shop_dashboard
 9. When user says "platform stats" -> use get_platform_stats
+10. When user says "sell at", "sell for", "sold at" -> use sell_at_price
+11. When user says "generate bill", "make bill", "print bill" -> use generate_bill
+12. When user says "today's profit", "daily profit", "profit report" -> use get_daily_profit
+13. When user says "product profit", "profit by product" -> use get_product_profit
+14. When user says "profit summary", "my profit", "show profit" -> use get_profit_summary
+15. For admin bill (with profit info), set bill_type: "admin". For customer bill, set bill_type: "customer"
 
 Output format for single action:
 {"action": "action_name", "entity": "product|order|shop|user|category", "parameters": {...}, "requires_confirmation": false}
