@@ -4,13 +4,52 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 const COLORS = ['#3b82f6', '#22c55e', '#f97316', '#8b5cf6', '#ef4444', '#06b6d4']
 const PAGE_SIZE = 20
 
+const getPasswordStrength = (password) => {
+  if (!password) return { score: 0, label: '', color: '' }
+
+  let score = 0
+
+  // Length checks
+  if (password.length >= 6) score += 1
+  if (password.length >= 8) score += 1
+  if (password.length >= 12) score += 1
+
+  // Character variety checks
+  if (/[a-z]/.test(password)) score += 1
+  if (/[A-Z]/.test(password)) score += 1
+  if (/[0-9]/.test(password)) score += 1
+  if (/[^a-zA-Z0-9]/.test(password)) score += 1
+
+  // Map score to strength level
+  if (score <= 2) return { score: 1, label: 'Weak', color: '#ef4444' }
+  if (score <= 4) return { score: 2, label: 'Fair', color: '#f97316' }
+  if (score <= 5) return { score: 3, label: 'Good', color: '#eab308' }
+  if (score <= 6) return { score: 4, label: 'Strong', color: '#22c55e' }
+  return { score: 5, label: 'Very Strong', color: '#10b981' }
+}
+
 function App() {
   // Auth state
   const [user, setUser] = useState(null)
   const [loginForm, setLoginForm] = useState({ email: '', password: '' })
+  const [rememberMe, setRememberMe] = useState(false)
+  const [loginLoading, setLoginLoading] = useState(false)
   const [loginError, setLoginError] = useState('')
   const [showRegister, setShowRegister] = useState(false)
   const [registerForm, setRegisterForm] = useState({ name: '', email: '', password: '', phone: '' })
+  const [registerLoading, setRegisterLoading] = useState(false)
+  const [showLoginPassword, setShowLoginPassword] = useState(false)
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false)
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
+  const [forgotEmail, setForgotEmail] = useState('')
+  const [forgotMessage, setForgotMessage] = useState('')
+  const [forgotLoading, setForgotLoading] = useState(false)
+  const [resetToken, setResetToken] = useState('')
+  const [showResetPassword, setShowResetPassword] = useState(false)
+  const [resetForm, setResetForm] = useState({ password: '', confirmPassword: '' })
+  const [showResetNewPassword, setShowResetNewPassword] = useState(false)
+  const [resetMessage, setResetMessage] = useState('')
+  const [resetLoading, setResetLoading] = useState(false)
 
   // Customer view states
   const [shopCategories, setShopCategories] = useState([])
@@ -67,6 +106,10 @@ function App() {
   const [command, setCommand] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [suggestions, setSuggestions] = useState([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [quickActions, setQuickActions] = useState([])
+  const [selectedSuggestion, setSelectedSuggestion] = useState(-1)
 
   // Form states
   const [productForm, setProductForm] = useState({
@@ -95,7 +138,8 @@ function App() {
   useEffect(() => {
     connectWebSocket()
     fetchShopCategories()
-    const savedUser = localStorage.getItem('kommandai_user')
+    // Check localStorage first (remember me), then sessionStorage
+    const savedUser = localStorage.getItem('kommandai_user') || sessionStorage.getItem('kommandai_user')
     if (savedUser) {
       setUser(JSON.parse(savedUser))
     }
@@ -131,8 +175,31 @@ function App() {
         fetchAdminProducts(user.shop_id, 0, true)
         fetchAdminOrders(user.shop_id, 0, true)
       }
+      // Fetch quick actions for the user's role
+      fetchQuickActions(user.role)
     }
   }, [user])
+
+  // Fetch suggestions as user types
+  useEffect(() => {
+    if (!user || !command.trim()) {
+      setSuggestions([])
+      setShowSuggestions(false)
+      return
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/command/suggestions?query=${encodeURIComponent(command)}&role=${user.role}&limit=5`)
+        const data = await res.json()
+        setSuggestions(data.suggestions || [])
+        setShowSuggestions(data.suggestions?.length > 0)
+        setSelectedSuggestion(-1)
+      } catch (err) {
+        console.error('Error fetching suggestions:', err)
+      }
+    }, 150)
+    return () => clearTimeout(timer)
+  }, [command, user])
 
   // Debounced search effects
   useEffect(() => {
@@ -210,6 +277,7 @@ function App() {
   const handleLogin = async (e) => {
     e.preventDefault()
     setLoginError('')
+    setLoginLoading(true)
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
@@ -219,7 +287,12 @@ function App() {
       if (res.ok) {
         const data = await res.json()
         setUser(data.user)
-        localStorage.setItem('kommandai_user', JSON.stringify(data.user))
+        // Save to localStorage if remember me, otherwise sessionStorage
+        if (rememberMe) {
+          localStorage.setItem('kommandai_user', JSON.stringify(data.user))
+        } else {
+          sessionStorage.setItem('kommandai_user', JSON.stringify(data.user))
+        }
         setLoginForm({ email: '', password: '' })
         addLog(`Welcome, ${data.user.name}!`, 'success')
       } else {
@@ -228,12 +301,15 @@ function App() {
       }
     } catch (err) {
       setLoginError('Connection error')
+    } finally {
+      setLoginLoading(false)
     }
   }
 
   const handleRegister = async (e) => {
     e.preventDefault()
     setLoginError('')
+    setRegisterLoading(true)
     try {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
@@ -252,13 +328,100 @@ function App() {
       }
     } catch (err) {
       setLoginError('Connection error')
+    } finally {
+      setRegisterLoading(false)
     }
   }
 
   const logout = () => {
     setUser(null)
     localStorage.removeItem('kommandai_user')
+    sessionStorage.removeItem('kommandai_user')
     addLog('Logged out', 'info')
+  }
+
+  const handleForgotPassword = async (e) => {
+    e.preventDefault()
+    setForgotMessage('')
+    setForgotLoading(true)
+    try {
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail })
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setForgotMessage(data.message)
+        if (data.reset_token) {
+          setResetToken(data.reset_token)
+        }
+      } else {
+        setForgotMessage(data.detail || 'Failed to send reset email')
+      }
+    } catch (err) {
+      setForgotMessage('Connection error')
+    } finally {
+      setForgotLoading(false)
+    }
+  }
+
+  const handleResetPassword = async (e) => {
+    e.preventDefault()
+    setResetMessage('')
+
+    if (resetForm.password !== resetForm.confirmPassword) {
+      setResetMessage('Passwords do not match')
+      return
+    }
+
+    if (resetForm.password.length < 6) {
+      setResetMessage('Password must be at least 6 characters')
+      return
+    }
+
+    setResetLoading(true)
+    try {
+      const res = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: resetToken, new_password: resetForm.password })
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setResetMessage(data.message)
+        // After 2 seconds, go back to login
+        setTimeout(() => {
+          setShowResetPassword(false)
+          setShowForgotPassword(false)
+          setResetToken('')
+          setResetForm({ password: '', confirmPassword: '' })
+          setForgotEmail('')
+          setForgotMessage('')
+          setResetMessage('')
+        }, 2000)
+      } else {
+        setResetMessage(data.detail || 'Failed to reset password')
+      }
+    } catch (err) {
+      setResetMessage('Connection error')
+    } finally {
+      setResetLoading(false)
+    }
+  }
+
+  const goToResetPassword = () => {
+    setShowResetPassword(true)
+  }
+
+  const backToLogin = () => {
+    setShowForgotPassword(false)
+    setShowResetPassword(false)
+    setForgotEmail('')
+    setForgotMessage('')
+    setResetToken('')
+    setResetForm({ password: '', confirmPassword: '' })
+    setResetMessage('')
   }
 
   const fetchShopCategories = async () => {
@@ -266,6 +429,49 @@ function App() {
       const res = await fetch('/api/shop-categories/with-counts')
       if (res.ok) setShopCategories(await res.json())
     } catch (err) { console.error('Error fetching shop categories:', err) }
+  }
+
+  const fetchQuickActions = async (role) => {
+    try {
+      const res = await fetch(`/api/command/quick-actions?role=${role}`)
+      if (res.ok) {
+        const data = await res.json()
+        setQuickActions(data.quick_actions || [])
+      }
+    } catch (err) { console.error('Error fetching quick actions:', err) }
+  }
+
+  const handleSuggestionSelect = (suggestion) => {
+    // Use the first example as the command template
+    if (suggestion.examples && suggestion.examples.length > 0) {
+      setCommand(suggestion.examples[0])
+    } else {
+      setCommand(suggestion.template)
+    }
+    setShowSuggestions(false)
+    setSelectedSuggestion(-1)
+  }
+
+  const handleQuickAction = (action) => {
+    setCommand(action.command)
+    // If the command ends with a space or quote, focus on input for user to complete
+  }
+
+  const handleCommandKeyDown = (e) => {
+    if (!showSuggestions || suggestions.length === 0) return
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setSelectedSuggestion(prev => Math.min(prev + 1, suggestions.length - 1))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setSelectedSuggestion(prev => Math.max(prev - 1, -1))
+    } else if (e.key === 'Enter' && selectedSuggestion >= 0) {
+      e.preventDefault()
+      handleSuggestionSelect(suggestions[selectedSuggestion])
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false)
+    }
   }
 
   const fetchShopsByCategory = async (categoryId, page = 0, reset = false) => {
@@ -429,6 +635,32 @@ function App() {
       const data = await res.json()
       if (res.ok) {
         addLog(`Done: ${data.message || 'Command executed'}`, 'success')
+
+        // Handle form pre-fill response (e.g., add shop command)
+        if (data.data?.action_type === 'prefill_form') {
+          if (data.data.form_type === 'shop_registration') {
+            // Pre-fill shop form and open it
+            const formData = data.data.form_data
+            setShopForm({
+              name: formData.name || '',
+              description: formData.description || '',
+              category_id: formData.category_id || '',
+              owner_name: formData.owner_name || '',
+              owner_email: formData.owner_email || '',
+              owner_phone: formData.owner_phone || '',
+              address: formData.address || '',
+              city: formData.city || '',
+              pincode: formData.pincode || '',
+              gst_number: formData.gst_number || ''
+            })
+            setEditingShop(null)
+            setShowShopForm(true)
+            setSuperAdminTab('shops')
+            addLog('Form pre-filled. Please review and submit.', 'info')
+          }
+        }
+
+        // Refresh data based on role
         if (user?.role === 'admin' && user.shop_id) {
           fetchAdminDashboard(user.shop_id)
           fetchAdminProducts(user.shop_id, 0, true)
@@ -697,7 +929,98 @@ function App() {
             <p>Multi-Vendor Marketplace Platform</p>
           </div>
 
-          {showRegister ? (
+          {showForgotPassword ? (
+            showResetPassword ? (
+              // Reset Password Form
+              <form onSubmit={handleResetPassword} className="login-form">
+                <h2>Reset Password</h2>
+                {resetMessage && <div className={resetMessage.includes('successfully') ? 'success-msg' : 'error-msg'}>{resetMessage}</div>}
+                <div className="form-group">
+                  <label>New Password</label>
+                  <div className="password-input-wrapper">
+                    <input
+                      type={showResetNewPassword ? "text" : "password"}
+                      value={resetForm.password}
+                      onChange={e => setResetForm({...resetForm, password: e.target.value})}
+                      required
+                      minLength={6}
+                    />
+                    <button type="button" className="password-toggle" onClick={() => setShowResetNewPassword(!showResetNewPassword)}>
+                      {showResetNewPassword ? "🙈" : "👁"}
+                    </button>
+                  </div>
+                  {resetForm.password && (
+                    <div className="password-strength">
+                      <div className="strength-bars">
+                        {[1, 2, 3, 4, 5].map(level => (
+                          <div
+                            key={level}
+                            className={`strength-bar ${level <= getPasswordStrength(resetForm.password).score ? 'active' : ''}`}
+                            style={{ backgroundColor: level <= getPasswordStrength(resetForm.password).score ? getPasswordStrength(resetForm.password).color : '' }}
+                          />
+                        ))}
+                      </div>
+                      <span className="strength-label" style={{ color: getPasswordStrength(resetForm.password).color }}>
+                        {getPasswordStrength(resetForm.password).label}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className="form-group">
+                  <label>Confirm Password</label>
+                  <div className="password-input-wrapper">
+                    <input
+                      type={showResetNewPassword ? "text" : "password"}
+                      value={resetForm.confirmPassword}
+                      onChange={e => setResetForm({...resetForm, confirmPassword: e.target.value})}
+                      required
+                    />
+                  </div>
+                  {resetForm.confirmPassword && (
+                    <div className={`password-match ${resetForm.password === resetForm.confirmPassword ? 'match' : 'no-match'}`}>
+                      {resetForm.password === resetForm.confirmPassword ? '✓ Passwords match' : '✗ Passwords do not match'}
+                    </div>
+                  )}
+                </div>
+                <button type="submit" className="login-btn" disabled={resetLoading}>
+                  {resetLoading ? <><span className="spinner"></span> Resetting...</> : 'Reset Password'}
+                </button>
+                <p className="switch-auth"><button type="button" onClick={backToLogin}>Back to Login</button></p>
+              </form>
+            ) : (
+              // Forgot Password Form
+              <form onSubmit={handleForgotPassword} className="login-form">
+                <h2>Forgot Password</h2>
+                <p className="form-description">Enter your email address and we'll send you a link to reset your password.</p>
+                {forgotMessage && (
+                  <div className={forgotMessage.includes('generated') ? 'success-msg' : 'info-msg'}>
+                    {forgotMessage}
+                  </div>
+                )}
+                {resetToken && (
+                  <div className="reset-token-box">
+                    <p>Demo Mode: Use this token to reset your password</p>
+                    <code>{resetToken}</code>
+                    <button type="button" className="login-btn" onClick={goToResetPassword} style={{marginTop: '15px'}}>
+                      Reset Password Now
+                    </button>
+                  </div>
+                )}
+                {!resetToken && (
+                  <>
+                    <div className="form-group">
+                      <label>Email</label>
+                      <input type="email" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} required />
+                    </div>
+                    <button type="submit" className="login-btn" disabled={forgotLoading}>
+                      {forgotLoading ? <><span className="spinner"></span> Sending...</> : 'Send Reset Link'}
+                    </button>
+                  </>
+                )}
+                <p className="switch-auth"><button type="button" onClick={backToLogin}>Back to Login</button></p>
+              </form>
+            )
+          ) : showRegister ? (
             <form onSubmit={handleRegister} className="login-form">
               <h2>Create Account</h2>
               {loginError && <div className="error-msg">{loginError}</div>}
@@ -715,9 +1038,32 @@ function App() {
               </div>
               <div className="form-group">
                 <label>Password</label>
-                <input type="password" value={registerForm.password} onChange={e => setRegisterForm({...registerForm, password: e.target.value})} required />
+                <div className="password-input-wrapper">
+                  <input type={showRegisterPassword ? "text" : "password"} value={registerForm.password} onChange={e => setRegisterForm({...registerForm, password: e.target.value})} required />
+                  <button type="button" className="password-toggle" onClick={() => setShowRegisterPassword(!showRegisterPassword)}>
+                    {showRegisterPassword ? "🙈" : "👁"}
+                  </button>
+                </div>
+                {registerForm.password && (
+                  <div className="password-strength">
+                    <div className="strength-bars">
+                      {[1, 2, 3, 4, 5].map(level => (
+                        <div
+                          key={level}
+                          className={`strength-bar ${level <= getPasswordStrength(registerForm.password).score ? 'active' : ''}`}
+                          style={{ backgroundColor: level <= getPasswordStrength(registerForm.password).score ? getPasswordStrength(registerForm.password).color : '' }}
+                        />
+                      ))}
+                    </div>
+                    <span className="strength-label" style={{ color: getPasswordStrength(registerForm.password).color }}>
+                      {getPasswordStrength(registerForm.password).label}
+                    </span>
+                  </div>
+                )}
               </div>
-              <button type="submit" className="login-btn">Register</button>
+              <button type="submit" className="login-btn" disabled={registerLoading}>
+                {registerLoading ? <><span className="spinner"></span> Registering...</> : 'Register'}
+              </button>
               <p className="switch-auth">Already have an account? <button type="button" onClick={() => setShowRegister(false)}>Login</button></p>
             </form>
           ) : (
@@ -730,21 +1076,37 @@ function App() {
               </div>
               <div className="form-group">
                 <label>Password</label>
-                <input type="password" value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} required />
+                <div className="password-input-wrapper">
+                  <input type={showLoginPassword ? "text" : "password"} value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} required />
+                  <button type="button" className="password-toggle" onClick={() => setShowLoginPassword(!showLoginPassword)}>
+                    {showLoginPassword ? "🙈" : "👁"}
+                  </button>
+                </div>
               </div>
-              <button type="submit" className="login-btn">Login</button>
+              <div className="login-options">
+                <label className="remember-me">
+                  <input type="checkbox" checked={rememberMe} onChange={e => setRememberMe(e.target.checked)} />
+                  <span>Remember me</span>
+                </label>
+                <button type="button" className="forgot-link" onClick={() => setShowForgotPassword(true)}>Forgot Password?</button>
+              </div>
+              <button type="submit" className="login-btn" disabled={loginLoading}>
+                {loginLoading ? <><span className="spinner"></span> Logging in...</> : 'Login'}
+              </button>
               <p className="switch-auth">New here? <button type="button" onClick={() => setShowRegister(true)}>Create Account</button></p>
             </form>
           )}
 
-          <div className="demo-accounts">
-            <h3>Demo Accounts</h3>
-            <div className="demo-list">
-              <button onClick={() => setLoginForm({ email: 'superadmin@kommandai.com', password: 'qwert12345' })}>Super Admin</button>
-              <button onClick={() => setLoginForm({ email: 'admin@kommandai.com', password: 'qwert12345' })}>Admin</button>
-              <button onClick={() => setLoginForm({ email: 'customer@kommandai.com', password: 'qwert12345' })}>Customer</button>
+          {!showForgotPassword && (
+            <div className="demo-accounts">
+              <h3>Demo Accounts</h3>
+              <div className="demo-list">
+                <button onClick={() => setLoginForm({ email: 'superadmin@kommandai.com', password: 'qwert12345' })}>Super Admin</button>
+                <button onClick={() => setLoginForm({ email: 'admin@kommandai.com', password: 'qwert12345' })}>Admin</button>
+                <button onClick={() => setLoginForm({ email: 'customer@kommandai.com', password: 'qwert12345' })}>Customer</button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     )
@@ -766,12 +1128,48 @@ function App() {
         </header>
 
         <div className="command-panel">
+          {quickActions.length > 0 && (
+            <div className="quick-actions">
+              {quickActions.map((action, i) => (
+                <button key={i} className="quick-action-btn" onClick={() => handleQuickAction(action)} title={action.command}>
+                  {action.label}
+                </button>
+              ))}
+            </div>
+          )}
           <form onSubmit={sendCommand} className="command-form">
             <div className="command-input-wrapper">
               <span className="command-icon">🤖</span>
-              <input type="text" value={command} onChange={e => setCommand(e.target.value)} placeholder="Platform commands..." disabled={isProcessing} className="command-input" />
+              <input
+                type="text"
+                value={command}
+                onChange={e => setCommand(e.target.value)}
+                onKeyDown={handleCommandKeyDown}
+                onFocus={() => command.trim() && suggestions.length > 0 && setShowSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                placeholder="Type a command or click quick actions above..."
+                disabled={isProcessing}
+                className="command-input"
+              />
               <button type="submit" disabled={isProcessing || !command.trim()} className="command-btn">{isProcessing ? '...' : 'Go'}</button>
             </div>
+            {showSuggestions && suggestions.length > 0 && (
+              <div className="suggestions-dropdown">
+                {suggestions.map((s, i) => (
+                  <div
+                    key={i}
+                    className={`suggestion-item ${selectedSuggestion === i ? 'selected' : ''}`}
+                    onClick={() => handleSuggestionSelect(s)}
+                  >
+                    <div className="suggestion-header">
+                      <span className="suggestion-category">{s.category}</span>
+                      <span className="suggestion-command">{s.description}</span>
+                    </div>
+                    <div className="suggestion-example">{s.examples?.[0] || s.template}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </form>
         </div>
 
@@ -994,12 +1392,48 @@ function App() {
         </header>
 
         <div className="command-panel">
+          {quickActions.length > 0 && (
+            <div className="quick-actions">
+              {quickActions.map((action, i) => (
+                <button key={i} className="quick-action-btn" onClick={() => handleQuickAction(action)} title={action.command}>
+                  {action.label}
+                </button>
+              ))}
+            </div>
+          )}
           <form onSubmit={sendCommand} className="command-form">
             <div className="command-input-wrapper">
               <span className="command-icon">🤖</span>
-              <input type="text" value={command} onChange={e => setCommand(e.target.value)} placeholder="Tell me what to do..." disabled={isProcessing} className="command-input" />
+              <input
+                type="text"
+                value={command}
+                onChange={e => setCommand(e.target.value)}
+                onKeyDown={handleCommandKeyDown}
+                onFocus={() => command.trim() && suggestions.length > 0 && setShowSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                placeholder="Tell me what to do... (e.g., 'list pending orders', 'restock product 5')"
+                disabled={isProcessing}
+                className="command-input"
+              />
               <button type="submit" disabled={isProcessing || !command.trim()} className="command-btn">{isProcessing ? '...' : 'Go'}</button>
             </div>
+            {showSuggestions && suggestions.length > 0 && (
+              <div className="suggestions-dropdown">
+                {suggestions.map((s, i) => (
+                  <div
+                    key={i}
+                    className={`suggestion-item ${selectedSuggestion === i ? 'selected' : ''}`}
+                    onClick={() => handleSuggestionSelect(s)}
+                  >
+                    <div className="suggestion-header">
+                      <span className="suggestion-category">{s.category}</span>
+                      <span className="suggestion-command">{s.description}</span>
+                    </div>
+                    <div className="suggestion-example">{s.examples?.[0] || s.template}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </form>
         </div>
 
@@ -1167,12 +1601,48 @@ function App() {
           <div className="header-right"><span className="user-info">Hi, {user.name}</span><button className="logout-btn" onClick={logout}>Logout</button></div>
         </header>
         <div className="command-panel customer-command">
+          {quickActions.length > 0 && (
+            <div className="quick-actions">
+              {quickActions.map((action, i) => (
+                <button key={i} className="quick-action-btn" onClick={() => handleQuickAction(action)} title={action.command}>
+                  {action.label}
+                </button>
+              ))}
+            </div>
+          )}
           <form onSubmit={sendCommand} className="command-form">
             <div className="command-input-wrapper">
               <span className="command-icon">🔍</span>
-              <input type="text" value={command} onChange={e => setCommand(e.target.value)} placeholder="Search products, shops..." disabled={isProcessing} className="command-input" />
+              <input
+                type="text"
+                value={command}
+                onChange={e => setCommand(e.target.value)}
+                onKeyDown={handleCommandKeyDown}
+                onFocus={() => command.trim() && suggestions.length > 0 && setShowSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                placeholder="Search products, shops... (e.g., 'search phones')"
+                disabled={isProcessing}
+                className="command-input"
+              />
               <button type="submit" disabled={isProcessing || !command.trim()} className="command-btn">{isProcessing ? '...' : 'Go'}</button>
             </div>
+            {showSuggestions && suggestions.length > 0 && (
+              <div className="suggestions-dropdown">
+                {suggestions.map((s, i) => (
+                  <div
+                    key={i}
+                    className={`suggestion-item ${selectedSuggestion === i ? 'selected' : ''}`}
+                    onClick={() => handleSuggestionSelect(s)}
+                  >
+                    <div className="suggestion-header">
+                      <span className="suggestion-category">{s.category}</span>
+                      <span className="suggestion-command">{s.description}</span>
+                    </div>
+                    <div className="suggestion-example">{s.examples?.[0] || s.template}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </form>
         </div>
         <div className="categories-grid">
