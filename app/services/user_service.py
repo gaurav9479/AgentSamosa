@@ -219,19 +219,19 @@ async def create_default_users(db: AsyncSession):
     service = UserService(db)
 
     # Check if super admin exists
-    existing = await service.get_by_email("superadmin@kommandai.com")
+    existing = await service.get_by_email("superadmin@agentsamosa.com")
     if not existing:
         # Create Super Admin
         await service.create(UserCreate(
-            email="superadmin@kommandai.com",
+            email="superadmin@agentsamosa.com",
             password="qwert12345",
             name="Super Admin",
             role=UserRole.SUPER_ADMIN.value
         ))
-        print("Created Super Admin: superadmin@kommandai.com / qwert12345")
+        print("Created Super Admin: superadmin@agentsamosa.com / qwert12345")
 
     # Check if shop owner (Admin) exists
-    existing = await service.get_by_email("admin@kommandai.com")
+    existing = await service.get_by_email("admin@agentsamosa.com")
     if not existing:
         # Get the Glamour Beauty Store shop_id
         result = await db.execute(select(Shop).where(Shop.name == "Glamour Beauty Store"))
@@ -239,21 +239,21 @@ async def create_default_users(db: AsyncSession):
         shop_id = shop.id if shop else None
 
         await service.create(UserCreate(
-            email="admin@kommandai.com",
+            email="admin@agentsamosa.com",
             password="qwert12345",
             name="Admin",
             role=UserRole.ADMIN.value,
             shop_id=shop_id
         ))
-        print("Created Admin (Shop Owner): admin@kommandai.com / qwert12345")
+        print("Created Admin (Shop Owner): admin@agentsamosa.com / qwert12345")
 
     # Check if customer exists
-    existing = await service.get_by_email("customer@kommandai.com")
+    existing = await service.get_by_email("customer@agentsamosa.com")
     if not existing:
         await service.create(UserCreate(
-            email="customer@kommandai.com",
+            email="customer@agentsamosa.com",
             password="qwert12345",
             name="Customer",
             role=UserRole.CUSTOMER.value
         ))
-        print("Created Customer: customer@kommandai.com / qwert12345")
+        print("Created Customer: customer@agentsamosa.com / qwert12345")

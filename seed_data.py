@@ -317,14 +317,14 @@ async def seed_users(shop_ids):
 
     users = [
         # Super Admin
-        {"name": "Platform Admin", "email": "superadmin@kommandai.com", "role": "super_admin", "shop_id": None},
+        {"name": "Platform Admin", "email": "superadmin@agentsamosa.com", "role": "super_admin", "shop_id": None},
         # Shop Owners (Admins)
-        {"name": "Priya Sharma", "email": "admin@kommandai.com", "role": "admin", "shop_id": shop_ids.get("Glamour Beauty Store")},
+        {"name": "Priya Sharma", "email": "admin@agentsamosa.com", "role": "admin", "shop_id": shop_ids.get("Glamour Beauty Store")},
         {"name": "Rahul Verma", "email": "rahul@techhub.com", "role": "admin", "shop_id": shop_ids.get("TechHub Electronics")},
         {"name": "Amit Patel", "email": "amit@freshmart.com", "role": "admin", "shop_id": shop_ids.get("Fresh Mart Grocery")},
         {"name": "Sneha Reddy", "email": "sneha@styleavenue.com", "role": "admin", "shop_id": shop_ids.get("Style Avenue")},
         # Customers
-        {"name": "Test Customer", "email": "customer@kommandai.com", "role": "customer", "shop_id": None},
+        {"name": "Test Customer", "email": "customer@agentsamosa.com", "role": "customer", "shop_id": None},
         {"name": "Ananya Gupta", "email": "ananya@email.com", "role": "customer", "shop_id": None},
         {"name": "Vikram Singh", "email": "vikram@email.com", "role": "customer", "shop_id": None},
     ]
@@ -383,7 +383,7 @@ async def seed_orders(shop_ids, customer_ids):
 
 
 async def main():
-    print("\n🌱 Seeding KommandAI Database...\n")
+    print("\n🌱 Seeding AgentSamosa Database...\n")
 
     # Initialize tables if they don't exist
     await init_db()
@@ -403,9 +403,9 @@ async def main():
 
     print("\n✅ Database seeded successfully!\n")
     print("Demo accounts (password: qwert12345):")
-    print("  • Super Admin: superadmin@kommandai.com")
-    print("  • Shop Admin:  admin@kommandai.com")
-    print("  • Customer:    customer@kommandai.com")
+    print("  • Super Admin: superadmin@agentsamosa.com")
+    print("  • Shop Admin:  admin@agentsamosa.com")
+    print("  • Customer:    customer@agentsamosa.com")
     print()
 
 

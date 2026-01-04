@@ -1,6 +1,6 @@
-# KommandAI Command Guide
+# AgentSamosa Command Guide
 
-This guide explains all the AI-powered commands available in KommandAI, organized by user role.
+This guide explains all the AI-powered commands available in AgentSamosa, organized by user role.
 
 ---
 
@@ -17,7 +17,7 @@ This guide explains all the AI-powered commands available in KommandAI, organize
 
 ## Overview
 
-KommandAI features an AI-powered natural language command system. Simply type what you want to do in plain English, and the system will understand and execute your request.
+AgentSamosa features an AI-powered natural language command system. Simply type what you want to do in plain English, and the system will understand and execute your request.
 
 ### How It Works
 

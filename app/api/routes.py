@@ -907,4 +907,4 @@ async def activate_shop(shop_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.get("/health")
 async def health_check():
-    return {"status": "healthy", "service": "KommandAI"}
+    return {"status": "healthy", "service": "AgentSamosa"}
