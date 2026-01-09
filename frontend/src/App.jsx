@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from 'recharts'
+import { getApiUrl, getWebSocketUrl } from './config'
 
 const COLORS = ['#3b82f6', '#22c55e', '#f97316', '#8b5cf6', '#ef4444', '#06b6d4']
 const PAGE_SIZE = 20
@@ -404,7 +405,7 @@ function App() {
     }
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/command/suggestions?query=${encodeURIComponent(command)}&role=${user.role}&limit=5`)
+        const res = await fetch(getApiUrl(`api/command/suggestions?query=${encodeURIComponent(command)}&role=${user.role}&limit=5`))
         const data = await res.json()
         setSuggestions(data.suggestions || [])
         setShowSuggestions(data.suggestions?.length > 0)
@@ -473,7 +474,7 @@ function App() {
   }, [userSearch, userRoleFilter])
 
   const connectWebSocket = () => {
-    const ws = new WebSocket(`ws://${window.location.hostname}:8000/api/ws`)
+    const ws = new WebSocket(getWebSocketUrl('api/ws'))
     ws.onopen = () => { setIsConnected(true); addLog('Connected to server', 'info') }
     ws.onmessage = (e) => {
       const data = JSON.parse(e.data)
@@ -494,7 +495,7 @@ function App() {
     setLoginError('')
     setLoginLoading(true)
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch(getApiUrl('api/auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(loginForm)
@@ -526,7 +527,7 @@ function App() {
     setLoginError('')
     setRegisterLoading(true)
     try {
-      const res = await fetch('/api/auth/register', {
+      const res = await fetch(getApiUrl('api/auth/register'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(registerForm)
@@ -560,7 +561,7 @@ function App() {
     setForgotMessage('')
     setForgotLoading(true)
     try {
-      const res = await fetch('/api/auth/forgot-password', {
+      const res = await fetch(getApiUrl('api/auth/forgot-password'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: forgotEmail })
@@ -597,7 +598,7 @@ function App() {
 
     setResetLoading(true)
     try {
-      const res = await fetch('/api/auth/reset-password', {
+      const res = await fetch(getApiUrl('api/auth/reset-password'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: resetToken, new_password: resetForm.password })
@@ -641,14 +642,14 @@ function App() {
 
   const fetchShopCategories = async () => {
     try {
-      const res = await fetch('/api/shop-categories/with-counts')
+      const res = await fetch(getApiUrl('api/shop-categories/with-counts'))
       if (res.ok) setShopCategories(await res.json())
     } catch (err) { console.error('Error fetching shop categories:', err) }
   }
 
   const fetchQuickActions = async (role) => {
     try {
-      const res = await fetch(`/api/command/quick-actions?role=${role}`)
+      const res = await fetch(getApiUrl(`api/command/quick-actions?role=${role}`))
       if (res.ok) {
         const data = await res.json()
         setQuickActions(data.quick_actions || [])
@@ -693,9 +694,9 @@ function App() {
     if (isLoading) return
     setIsLoading(true)
     try {
-      let url = `/api/shops/by-category/${categoryId}?skip=${page * PAGE_SIZE}&limit=${PAGE_SIZE}`
+      let url = `api/shops/by-category/${categoryId}?skip=${page * PAGE_SIZE}&limit=${PAGE_SIZE}`
       if (shopsSearch) url += `&search=${encodeURIComponent(shopsSearch)}`
-      const res = await fetch(url)
+      const res = await fetch(getApiUrl(url))
       if (res.ok) {
         const data = await res.json()
         setShops(prev => reset ? data : [...prev, ...data])
@@ -710,9 +711,9 @@ function App() {
     if (isLoading) return
     setIsLoading(true)
     try {
-      let url = `/api/shops/${shopId}/products?skip=${page * PAGE_SIZE}&limit=${PAGE_SIZE}`
+      let url = `api/shops/${shopId}/products?skip=${page * PAGE_SIZE}&limit=${PAGE_SIZE}`
       if (searchQuery) url += `&search=${encodeURIComponent(searchQuery)}`
-      const res = await fetch(url)
+      const res = await fetch(getApiUrl(url))
       if (res.ok) {
         const data = await res.json()
         setShopProducts(prev => reset ? data : [...prev, ...data])
@@ -726,11 +727,11 @@ function App() {
   const fetchAdminDashboard = async (shopId) => {
     try {
       const [dashRes, lowRes, catRes, expiryRes, clearanceRes] = await Promise.all([
-        fetch(`/api/shops/${shopId}/dashboard`),
-        fetch(`/api/shops/${shopId}/low-stock`),
-        fetch('/api/categories'),
-        fetch(`/api/shops/${shopId}/expiring-soon`),
-        fetch(`/api/shops/${shopId}/clearance`)
+        fetch(getApiUrl(`api/shops/${shopId}/dashboard`)),
+        fetch(getApiUrl(`api/shops/${shopId}/low-stock`)),
+        fetch(getApiUrl('api/categories')),
+        fetch(getApiUrl(`api/shops/${shopId}/expiring-soon`)),
+        fetch(getApiUrl(`api/shops/${shopId}/clearance`))
       ])
       if (dashRes.ok) setDashboardStats(await dashRes.json())
       if (lowRes.ok) setLowStockProducts(await lowRes.json())
@@ -744,9 +745,9 @@ function App() {
     if (isLoading) return
     setIsLoading(true)
     try {
-      let url = `/api/shops/${shopId}/products?include_inactive=true&skip=${page * PAGE_SIZE}&limit=${PAGE_SIZE}`
+      let url = `api/shops/${shopId}/products?include_inactive=true&skip=${page * PAGE_SIZE}&limit=${PAGE_SIZE}`
       if (adminProductSearch) url += `&search=${encodeURIComponent(adminProductSearch)}`
-      const res = await fetch(url)
+      const res = await fetch(getApiUrl(url))
       if (res.ok) {
         const data = await res.json()
         setProducts(prev => reset ? data : [...prev, ...data])
@@ -761,9 +762,9 @@ function App() {
     if (isLoading) return
     setIsLoading(true)
     try {
-      let url = `/api/shops/${shopId}/orders?skip=${page * PAGE_SIZE}&limit=${PAGE_SIZE}`
+      let url = `api/shops/${shopId}/orders?skip=${page * PAGE_SIZE}&limit=${PAGE_SIZE}`
       if (orderStatusFilter) url += `&status=${orderStatusFilter}`
-      const res = await fetch(url)
+      const res = await fetch(getApiUrl(url))
       if (res.ok) {
         let data = await res.json()
         if (orderSearch) {
@@ -783,7 +784,7 @@ function App() {
 
   const fetchPlatformStats = async () => {
     try {
-      const res = await fetch('/api/platform/stats')
+      const res = await fetch(getApiUrl('api/platform/stats'))
       if (res.ok) setPlatformStats(await res.json())
     } catch (err) { console.error('Error fetching platform stats:', err) }
   }
@@ -792,9 +793,9 @@ function App() {
     if (isLoading) return
     setIsLoading(true)
     try {
-      let url = `/api/platform/shops?skip=${page * PAGE_SIZE}&limit=${PAGE_SIZE}`
+      let url = `api/platform/shops?skip=${page * PAGE_SIZE}&limit=${PAGE_SIZE}`
       if (shopSearch) url += `&search=${encodeURIComponent(shopSearch)}`
-      const res = await fetch(url)
+      const res = await fetch(getApiUrl(url))
       if (res.ok) {
         let data = await res.json()
         if (shopSearch) {
@@ -816,9 +817,9 @@ function App() {
     if (isLoading) return
     setIsLoading(true)
     try {
-      let url = `/api/users?skip=${page * PAGE_SIZE}&limit=${PAGE_SIZE}`
+      let url = `api/users?skip=${page * PAGE_SIZE}&limit=${PAGE_SIZE}`
       if (userRoleFilter) url += `&role=${userRoleFilter}`
-      const res = await fetch(url)
+      const res = await fetch(getApiUrl(url))
       if (res.ok) {
         let data = await res.json()
         if (userSearch) {
@@ -888,7 +889,7 @@ function App() {
     setIsProcessing(true)
     addLog(`Processing: "${command}"`, 'info')
     try {
-      const res = await fetch('/api/command', {
+      const res = await fetch(getApiUrl('api/command'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: command.trim() })
@@ -962,7 +963,7 @@ function App() {
         expiry_date: productForm.expiry_date ? new Date(productForm.expiry_date).toISOString() : null,
         clearance_discount: parseFloat(productForm.clearance_discount) || 20
       }
-      const res = await fetch('/api/products', {
+      const res = await fetch(getApiUrl('api/products'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
@@ -1105,7 +1106,7 @@ function App() {
         body: JSON.stringify(payload)
       })
     } else {
-      res = await fetch('/api/shops', {
+      res = await fetch(getApiUrl('api/shops'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
