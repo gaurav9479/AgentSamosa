@@ -3,9 +3,9 @@ from sqlalchemy import select, func, and_
 from typing import Dict, Any, List
 from datetime import datetime, timedelta
 
-from app.models.order import Order, OrderStatus
-from app.models.product import Product
-from app.models.customer import Customer
+from SERVER.models.order import Order, OrderStatus
+from SERVER.models.product import Product
+from SERVER.models.customer import Customer
 
 
 class AnalyticsService:

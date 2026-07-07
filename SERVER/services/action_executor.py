@@ -2,19 +2,19 @@ import uuid
 from typing import Dict, Any, Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.schemas.command import ParsedIntent, CommandResponse, MultiStepPlan
-from app.schemas.product import ProductCreate, ProductUpdate
-from app.schemas.order import OrderCreate, OrderUpdate
-from app.schemas.customer import CustomerCreate, CustomerUpdate
-from app.schemas.shop import ShopCreate, ShopUpdate
-from app.schemas.user import UserCreate, UserUpdate
-from app.services.product_service import ProductService, CategoryService
-from app.services.order_service import OrderService
-from app.services.customer_service import CustomerService
-from app.services.shop_service import ShopService, ShopCategoryService
-from app.services.user_service import UserService
-from app.services.analytics_service import AnalyticsService
-from app.services.billing_service import BillingService
+from SERVER.schemas.command import ParsedIntent, CommandResponse, MultiStepPlan
+from SERVER.schemas.product import ProductCreate, ProductUpdate
+from SERVER.schemas.order import OrderCreate, OrderUpdate
+from SERVER.schemas.customer import CustomerCreate, CustomerUpdate
+from SERVER.schemas.shop import ShopCreate, ShopUpdate
+from SERVER.schemas.user import UserCreate, UserUpdate
+from SERVER.services.product_service import ProductService, CategoryService
+from SERVER.services.order_service import OrderService
+from SERVER.services.customer_service import CustomerService
+from SERVER.services.shop_service import ShopService, ShopCategoryService
+from SERVER.services.user_service import UserService
+from SERVER.services.analytics_service import AnalyticsService
+from SERVER.services.billing_service import BillingService
 
 
 class ActionExecutor:
@@ -705,7 +705,7 @@ class ActionExecutor:
                 message=f"Order {order_id} cannot be confirmed. Current status: {order.status}",
             )
 
-        from app.schemas.order import OrderUpdate
+        from SERVER.schemas.order import OrderUpdate
         data = OrderUpdate(status="confirmed")
         updated = await self.order_service.update(order_id, data)
 
@@ -741,7 +741,7 @@ class ActionExecutor:
                 message=f"Order {order_id} cannot be shipped. Current status: {order.status}",
             )
 
-        from app.schemas.order import OrderUpdate
+        from SERVER.schemas.order import OrderUpdate
         data = OrderUpdate(status="shipped")
         updated = await self.order_service.update(order_id, data)
 
@@ -780,7 +780,7 @@ class ActionExecutor:
                 message=f"Order {order_id} cannot be marked as delivered. Current status: {order.status}",
             )
 
-        from app.schemas.order import OrderUpdate
+        from SERVER.schemas.order import OrderUpdate
         data = OrderUpdate(status="delivered")
         updated = await self.order_service.update(order_id, data)
 
@@ -816,7 +816,7 @@ class ActionExecutor:
                 message=f"Order {order_id} has already been refunded",
             )
 
-        from app.schemas.order import OrderUpdate
+        from SERVER.schemas.order import OrderUpdate
         data = OrderUpdate(status="refunded")
         updated = await self.order_service.update(order_id, data)
 
@@ -1417,7 +1417,7 @@ class ActionExecutor:
 
     async def _create_shop_category(self, params: Dict[str, Any]) -> CommandResponse:
         try:
-            from app.schemas.shop import ShopCategoryCreate
+            from SERVER.schemas.shop import ShopCategoryCreate
             data = ShopCategoryCreate(
                 name=params["name"],
                 description=params.get("description"),
@@ -1439,7 +1439,7 @@ class ActionExecutor:
 
     async def _create_product_category(self, params: Dict[str, Any]) -> CommandResponse:
         try:
-            from app.schemas.product import CategoryCreate
+            from SERVER.schemas.product import CategoryCreate
             data = CategoryCreate(
                 name=params["name"],
                 description=params.get("description"),

@@ -3,10 +3,10 @@ from sqlalchemy import select, func, and_, or_
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 
-from app.models.shop import Shop, ShopCategory
-from app.models.product import Product
-from app.models.order import Order
-from app.schemas.shop import ShopCreate, ShopUpdate, ShopCategoryCreate, ShopCategoryUpdate
+from SERVER.models.shop import Shop, ShopCategory
+from SERVER.models.product import Product
+from SERVER.models.order import Order
+from SERVER.schemas.shop import ShopCreate, ShopUpdate, ShopCategoryCreate, ShopCategoryUpdate
 
 
 class ShopCategoryService:

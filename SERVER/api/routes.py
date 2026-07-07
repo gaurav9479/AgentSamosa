@@ -2,37 +2,37 @@ from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, HTTPExce
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional, Dict, Any, List
 
-from app.core.database import get_db
-from app.core.websocket import manager
-from app.schemas.command import CommandInput, CommandResponse, ParsedIntent, MultiStepPlan
-from app.schemas.product import (
+from SERVER.core.database import get_db
+from SERVER.core.websocket import manager
+from SERVER.schemas.command import CommandInput, CommandResponse, ParsedIntent, MultiStepPlan
+from SERVER.schemas.product import (
     ProductCreate, ProductUpdate, ProductResponse,
     CategoryCreate, CategoryUpdate, CategoryResponse
 )
-from app.schemas.order import OrderCreate, OrderUpdate, OrderResponse
-from app.schemas.customer import CustomerCreate, CustomerUpdate, CustomerResponse
-from app.schemas.shop import (
+from SERVER.schemas.order import OrderCreate, OrderUpdate, OrderResponse
+from SERVER.schemas.customer import CustomerCreate, CustomerUpdate, CustomerResponse
+from SERVER.schemas.shop import (
     ShopCreate, ShopUpdate, ShopResponse,
     ShopCategoryCreate, ShopCategoryUpdate, ShopCategoryResponse
 )
-from app.services.intent_parser import IntentParser
-from app.services.action_executor import ActionExecutor
-from app.services.product_service import ProductService, CategoryService
-from app.services.order_service import OrderService
-from app.services.customer_service import CustomerService
-from app.services.analytics_service import AnalyticsService
-from app.services.shop_service import ShopService, ShopCategoryService
-from app.services.user_service import UserService
-from app.schemas.user import (
+from SERVER.services.intent_parser import IntentParser
+from SERVER.services.action_executor import ActionExecutor
+from SERVER.services.product_service import ProductService, CategoryService
+from SERVER.services.order_service import OrderService
+from SERVER.services.customer_service import CustomerService
+from SERVER.services.analytics_service import AnalyticsService
+from SERVER.services.shop_service import ShopService, ShopCategoryService
+from SERVER.services.user_service import UserService
+from SERVER.schemas.user import (
     UserCreate, UserUpdate, UserResponse, UserLogin, LoginResponse, ShopOwnerRegister,
     ForgotPasswordRequest, ForgotPasswordResponse, VerifyResetTokenRequest,
     VerifyResetTokenResponse, ResetPasswordRequest, ResetPasswordResponse
 )
-from app.models.action_log import ActionLog
-from app.models.customer import Customer
-from app.models.product import Category
-from app.models.user import UserRole
-from app.services.command_suggestions import CommandSuggestionService
+from SERVER.models.action_log import ActionLog
+from SERVER.models.customer import Customer
+from SERVER.models.product import Category
+from SERVER.models.user import UserRole
+from SERVER.services.command_suggestions import CommandSuggestionService
 
 router = APIRouter()
 command_suggestion_service = CommandSuggestionService()
@@ -214,8 +214,8 @@ async def get_category_shops_with_stats(category_id: int, db: AsyncSession = Dep
 
 
     from sqlalchemy import select
-    from app.models.shop import Shop
-    from app.models.order import Order
+    from SERVER.models.shop import Shop
+    from SERVER.models.order import Order
     from sqlalchemy import func, and_
 
     result = await db.execute(
@@ -351,9 +351,9 @@ async def get_shop_dashboard(shop_id: int, db: AsyncSession = Depends(get_db)):
 async def get_shop_admin_stats(shop_id: int, db: AsyncSession = Depends(get_db)):
 
     from sqlalchemy import select, func, and_
-    from app.models.shop import Shop
-    from app.models.order import Order
-    from app.models.product import Product
+    from SERVER.models.shop import Shop
+    from SERVER.models.order import Order
+    from SERVER.models.product import Product
     from datetime import datetime, timedelta
 
     service = ShopService(db)

@@ -5,9 +5,9 @@ import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from app.models.user import User, UserRole
-from app.models.shop import Shop
-from app.schemas.user import UserCreate, UserUpdate
+from SERVER.models.user import User, UserRole
+from SERVER.models.shop import Shop
+from SERVER.schemas.user import UserCreate, UserUpdate
 
 
 class UserService:

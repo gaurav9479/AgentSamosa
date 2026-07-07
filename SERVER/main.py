@@ -2,10 +2,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.core.config import settings
-from app.core.database import init_db, async_session
-from app.api.routes import router
-from app.services.user_service import create_default_users
+from SERVER.core.config import settings
+from SERVER.core.database import init_db, async_session
+from SERVER.api.routes import router
+from SERVER.services.user_service import create_default_users
 
 
 @asynccontextmanager

@@ -2,8 +2,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from typing import Optional, List
 
-from app.models.customer import Customer
-from app.schemas.customer import CustomerCreate, CustomerUpdate
+from SERVER.models.customer import Customer
+from SERVER.schemas.customer import CustomerCreate, CustomerUpdate
 
 
 class CustomerService:

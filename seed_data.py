@@ -8,8 +8,8 @@ from datetime import datetime, timedelta
 import random
 
 from sqlalchemy import text
-from app.core.database import async_session, init_db
-from app.models import (
+from SERVER.core.database import async_session, init_db
+from SERVER.models import (
     User, UserRole, Shop, ShopCategory, Product, Category, Order, Customer, ActionLog
 )
 

@@ -2,9 +2,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from typing import Optional, List
 
-from app.models.order import Order, OrderStatus
-from app.models.product import Product
-from app.schemas.order import OrderCreate, OrderUpdate
+from SERVER.models.order import Order, OrderStatus
+from SERVER.models.product import Product
+from SERVER.schemas.order import OrderCreate, OrderUpdate
 
 
 class OrderService:

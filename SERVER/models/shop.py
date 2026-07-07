@@ -2,7 +2,7 @@ from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, Foreig
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
-from app.core.database import Base
+from SERVER.core.database import Base
 
 
 class ShopCategory(Base):

@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean
 from sqlalchemy.sql import func
 
-from app.core.database import Base
+from SERVER.core.database import Base
 
 
 class Customer(Base):

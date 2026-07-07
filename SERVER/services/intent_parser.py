@@ -3,8 +3,8 @@ import re
 import google.generativeai as genai
 from typing import Dict, Any, Optional, List, Union
 
-from app.core.config import settings
-from app.schemas.command import ParsedIntent, MultiStepPlan
+from SERVER.core.config import settings
+from SERVER.schemas.command import ParsedIntent, MultiStepPlan
 
 
 class FallbackParser:

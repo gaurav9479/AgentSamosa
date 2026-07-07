@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, DateTime, JSON
 from sqlalchemy.sql import func
 
-from app.core.database import Base
+from SERVER.core.database import Base
 
 
 class ActionLog(Base):

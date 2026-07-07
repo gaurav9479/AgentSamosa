@@ -3,7 +3,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import enum
 
-from app.core.database import Base
+from SERVER.core.database import Base
 
 
 class UserRole(enum.Enum):

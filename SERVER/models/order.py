@@ -3,7 +3,7 @@ from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 import enum
 
-from app.core.database import Base
+from SERVER.core.database import Base
 
 
 class OrderStatus(str, enum.Enum):

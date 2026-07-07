@@ -3,8 +3,8 @@ from sqlalchemy import select, func, or_, and_
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone, timedelta
 
-from app.models.product import Product, Category
-from app.schemas.product import ProductCreate, ProductUpdate, CategoryCreate, CategoryUpdate
+from SERVER.models.product import Product, Category
+from SERVER.schemas.product import ProductCreate, ProductUpdate, CategoryCreate, CategoryUpdate
 
 
 class CategoryService:
